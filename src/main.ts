@@ -2,6 +2,7 @@ import './styles.css';
 import { roleDefinitions } from './data/access';
 import { caseFiles } from './data/cases';
 import { chatThreads } from './data/chats';
+import { virtualDirectories, virtualDocuments, virtualVolumes } from './data/fileSystem';
 import { loginStage } from './data/loginStage';
 import { currentProfile } from './data/player';
 import { evaluateAccess, findRoleDefinition, formatClearance } from './domain/access';
@@ -16,6 +17,9 @@ import type {
   PlayerProfile,
   RoleId,
   TerminalLine,
+  VirtualDirectory,
+  VirtualDocument,
+  VirtualVolume,
 } from './domain/types';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -29,6 +33,11 @@ const profile = currentProfile;
 let selectedFileId = caseFiles[0].id;
 let selectedThreadId = chatThreads[0].id;
 let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
+let workspaceView: 'files' | 'records' = 'files';
+let selectedDirectoryId = 'local-root';
+let selectedDocumentId = 'local-session-log';
+let showUsbNotice = false;
+let usbNoticeScheduled = false;
 let loginError = '';
 
 function startBootSequence(): void {
@@ -39,6 +48,35 @@ function startBootSequence(): void {
     appView = 'login';
     render();
   }, loginStage.scanDurationMs);
+}
+
+function enterArchiveShell(): void {
+  appView = 'archive';
+  workspaceView = 'files';
+  selectedDirectoryId = 'local-root';
+  selectedDocumentId = 'local-session-log';
+  render();
+  scheduleUsbNotice();
+}
+
+function scheduleUsbNotice(): void {
+  if (usbNoticeScheduled) return;
+
+  usbNoticeScheduled = true;
+
+  window.setTimeout(() => {
+    if (appView !== 'archive') return;
+    showUsbNotice = true;
+    render();
+  }, 1200);
+}
+
+function openUsbDirectory(): void {
+  workspaceView = 'files';
+  selectedDirectoryId = 'usb-root';
+  selectedDocumentId = 'commission-brief';
+  showUsbNotice = false;
+  render();
 }
 
 function renderTerminalLineItem(line: TerminalLine, index: number): string {
@@ -176,8 +214,7 @@ function bindLoginForm(): void {
 
     window.setTimeout(() => {
       if (appView !== 'authenticating') return;
-      appView = 'archive';
-      render();
+      enterArchiveShell();
     }, loginStage.successDurationMs);
   });
 }
@@ -220,6 +257,165 @@ function getPermissionLabel(permission: Permission): string {
   };
 
   return labels[permission];
+}
+
+function getSelectedDirectory(): VirtualDirectory {
+  return virtualDirectories.find((directory) => directory.id === selectedDirectoryId) ?? virtualDirectories[0];
+}
+
+function getSelectedDocument(directory: VirtualDirectory): VirtualDocument | undefined {
+  const documentInDirectory = virtualDocuments.find(
+    (document) => document.id === selectedDocumentId && document.directoryId === directory.id,
+  );
+
+  if (documentInDirectory) return documentInDirectory;
+
+  return virtualDocuments.find((document) => document.id === directory.fileIds[0]);
+}
+
+function getVolume(volumeId: string): VirtualVolume {
+  return virtualVolumes.find((volume) => volume.id === volumeId) ?? virtualVolumes[0];
+}
+
+function renderWorkspaceSwitcher(): string {
+  return `
+    <nav class="workspace-switcher" aria-label="工作区切换">
+      <button class="${workspaceView === 'files' ? 'is-active' : ''}" type="button" data-workspace-view="files">
+        文件管理器
+      </button>
+      <button class="${workspaceView === 'records' ? 'is-active' : ''}" type="button" data-workspace-view="records">
+        档案记录
+      </button>
+    </nav>
+  `;
+}
+
+function renderStorageTree(): string {
+  return virtualVolumes
+    .map((volume) => {
+      const selected = selectedDirectoryId === volume.rootDirectoryId ? 'is-selected' : '';
+
+      return `
+        <button class="storage-row ${selected}" type="button" data-directory-id="${volume.rootDirectoryId}">
+          <span class="storage-row__icon">${volume.status === 'detected' ? 'USB' : 'DSK'}</span>
+          <span class="storage-row__main">
+            <span class="storage-row__label">${volume.label}</span>
+            <span class="storage-row__device">${volume.deviceName}</span>
+          </span>
+          <span class="storage-row__path">${volume.mountPath}</span>
+        </button>
+      `;
+    })
+    .join('');
+}
+
+function renderDirectoryList(directory: VirtualDirectory): string {
+  const documents = directory.fileIds
+    .map((fileId) => virtualDocuments.find((document) => document.id === fileId))
+    .filter((document): document is VirtualDocument => Boolean(document));
+
+  return documents
+    .map((document) => {
+      const selected = document.id === selectedDocumentId ? 'is-selected' : '';
+
+      return `
+        <button class="document-row ${selected}" type="button" data-document-id="${document.id}">
+          <span class="document-row__icon">${document.extension}</span>
+          <span class="document-row__main">
+            <span class="document-row__name">${document.name}.${document.extension}</span>
+            <span class="document-row__summary">${document.summary}</span>
+          </span>
+          <span class="document-row__meta">${document.sizeLabel}</span>
+        </button>
+      `;
+    })
+    .join('');
+}
+
+function renderDocumentPreview(document: VirtualDocument | undefined): string {
+  if (!document) {
+    return `
+      <section class="document-panel" aria-label="文档预览">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">PREVIEW</p>
+            <h2>未选择文档</h2>
+          </div>
+        </header>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="document-panel" aria-label="文档预览">
+      <header class="panel-header">
+        <div>
+          <p class="eyebrow">DOCUMENT</p>
+          <h2>${document.name}.${document.extension}</h2>
+        </div>
+        <div class="clearance-block">
+          <span>标记</span>
+          <strong>${document.classification}</strong>
+        </div>
+      </header>
+      <div class="record-grid">
+        <div class="field">
+          <span>修改时间</span>
+          <strong>${document.modified}</strong>
+        </div>
+        <div class="field">
+          <span>大小</span>
+          <strong>${document.sizeLabel}</strong>
+        </div>
+      </div>
+      <article class="document-body">
+        ${document.body.map((paragraph) => `<p>${paragraph}</p>`).join('')}
+      </article>
+      <div class="document-tags">
+        ${document.tags.map((tag) => `<span>${tag}</span>`).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderFileManagerWorkspace(): string {
+  const directory = getSelectedDirectory();
+  const selectedDocument = getSelectedDocument(directory);
+  const volume = getVolume(directory.volumeId);
+
+  return `
+    <section class="workspace workspace--files">
+      <aside class="storage-panel" aria-label="存储介质">
+        <header class="panel-header panel-header--compact">
+          <div>
+            <p class="eyebrow">MOUNTS</p>
+            <h2>存储介质</h2>
+          </div>
+        </header>
+        <div class="storage-list">
+          ${renderStorageTree()}
+        </div>
+      </aside>
+
+      <section class="directory-panel" aria-label="目录内容">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">${volume.deviceName}</p>
+            <h2>${directory.path}</h2>
+          </div>
+        </header>
+        <div class="directory-meta">
+          <span>${volume.description}</span>
+          <span>${directory.fileIds.length} FILES</span>
+        </div>
+        <div class="document-list">
+          ${renderDirectoryList(directory)}
+        </div>
+      </section>
+
+      ${renderDocumentPreview(selectedDocument)}
+    </section>
+  `;
 }
 
 function renderFileList(): string {
@@ -477,10 +673,108 @@ function renderChat(): string {
   `;
 }
 
+function renderRecordsWorkspace(activeFile: CaseFile): string {
+  return `
+    <section class="workspace">
+      <aside class="sidebar" aria-label="档案列表">
+        <div class="panel-header panel-header--compact">
+          <div>
+            <p class="eyebrow">CASE INDEX</p>
+            <h2>档案索引</h2>
+          </div>
+        </div>
+        ${renderRoleSummary()}
+        <div class="search-strip">
+          <span>QUERY</span>
+          <input type="text" value="北线 灯塔 匿名信 权限" aria-label="档案搜索" />
+        </div>
+        <nav class="file-list">
+          ${renderFileList()}
+        </nav>
+      </aside>
+
+      ${renderActiveFile(activeFile)}
+
+      <aside class="chat-panel" aria-label="通信镜像">
+        ${renderChat()}
+      </aside>
+    </section>
+  `;
+}
+
+function renderUsbNotice(): string {
+  if (!showUsbNotice) return '';
+
+  return `
+    <aside class="usb-notice" aria-label="外接介质检测">
+      <div>
+        <p class="eyebrow">DEVICE DETECTED</p>
+        <h2>检测到外接介质</h2>
+      </div>
+      <p>USB_AURORA_1907 已挂载为只读镜像。根目录包含新的委托文档。</p>
+      <div class="usb-notice__actions">
+        <button type="button" data-usb-action="open">打开介质</button>
+        <button type="button" data-usb-action="dismiss">稍后</button>
+      </div>
+    </aside>
+  `;
+}
+
 function renderTerminalLine(): string {
   const readableCount = caseFiles.filter((file) => evaluateAccess(profile, file.access).allowed).length;
   const solvedCount = caseFiles.filter((file) => file.reviewStatus === 'solved').length;
-  return `SYS: ${caseFiles.length} FILES MOUNTED / ${readableCount} READABLE / ${solvedCount} VERIFIED / ROLE ${profile.activeRole.toUpperCase()}`;
+  const workspaceLabel = workspaceView === 'files' ? 'FILE MANAGER' : 'RECORD INDEX';
+  return `SYS: ${caseFiles.length} RECORDS / ${readableCount} READABLE / ${solvedCount} VERIFIED / ${workspaceLabel} / ROLE ${profile.activeRole.toUpperCase()}`;
+}
+
+function bindArchiveEvents(): void {
+  document.querySelectorAll<HTMLButtonElement>('[data-workspace-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const view = button.dataset.workspaceView;
+      if (view !== 'files' && view !== 'records') return;
+      workspaceView = view;
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-directory-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const directoryId = button.dataset.directoryId;
+      const directory = virtualDirectories.find((item) => item.id === directoryId);
+      if (!directory) return;
+
+      selectedDirectoryId = directory.id;
+      selectedDocumentId = directory.fileIds[0] ?? '';
+      showUsbNotice = false;
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-document-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedDocumentId = button.dataset.documentId ?? selectedDocumentId;
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-file-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedFileId = button.dataset.fileId ?? selectedFileId;
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-usb-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.dataset.usbAction === 'open') {
+        openUsbDirectory();
+        return;
+      }
+
+      showUsbNotice = false;
+      render();
+    });
+  });
 }
 
 function render(): void {
@@ -501,6 +795,8 @@ function render(): void {
   }
 
   const activeFile = caseFiles.find((file) => file.id === selectedFileId) ?? caseFiles[0];
+  const workspaceMarkup =
+    workspaceView === 'files' ? renderFileManagerWorkspace() : renderRecordsWorkspace(activeFile);
 
   root.innerHTML = `
     <main class="archive-shell">
@@ -510,53 +806,27 @@ function render(): void {
           <img class="brand-mark" src="./assets/bureau-seal.svg" alt="" />
           <div>
             <h1>黑箱档案局</h1>
-            <p>Internal Archive Console / Demonstration Build</p>
+            <p>Read-Only Recovery Console / Local Cache Mode</p>
           </div>
         </div>
+        ${renderWorkspaceSwitcher()}
         <div class="system-readout">
           <span>LOCAL</span>
           <strong>NODE-07</strong>
         </div>
       </header>
 
-      <section class="workspace">
-        <aside class="sidebar" aria-label="档案列表">
-          <div class="panel-header panel-header--compact">
-            <div>
-              <p class="eyebrow">CASE INDEX</p>
-              <h2>档案索引</h2>
-            </div>
-          </div>
-          ${renderRoleSummary()}
-          <div class="search-strip">
-            <span>QUERY</span>
-            <input type="text" value="北线 灯塔 匿名信 权限" aria-label="档案搜索" />
-          </div>
-          <nav class="file-list">
-            ${renderFileList()}
-          </nav>
-        </aside>
-
-        ${renderActiveFile(activeFile)}
-
-        <aside class="chat-panel" aria-label="聊天线索">
-          ${renderChat()}
-        </aside>
-      </section>
+      ${workspaceMarkup}
+      ${renderUsbNotice()}
 
       <footer class="terminal-bar">
         <span>${renderTerminalLine()}</span>
-        <span>F1 HINT / F2 NOTES / F3 MAP</span>
+        <span>F1 HELP / F2 SESSION LOG / F3 INDEX</span>
       </footer>
     </main>
   `;
 
-  document.querySelectorAll<HTMLButtonElement>('[data-file-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      selectedFileId = button.dataset.fileId ?? selectedFileId;
-      render();
-    });
-  });
+  bindArchiveEvents();
 }
 
 startBootSequence();

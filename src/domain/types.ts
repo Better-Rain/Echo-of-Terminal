@@ -130,3 +130,35 @@ export type LoginStageConfig = {
   failureMessage: string;
   successLines: TerminalLine[];
 };
+
+export type VirtualVolume = {
+  id: string;
+  label: string;
+  deviceName: string;
+  mountPath: string;
+  status: 'mounted' | 'detected' | 'restricted';
+  description: string;
+  rootDirectoryId: string;
+};
+
+export type VirtualDirectory = {
+  id: string;
+  volumeId: string;
+  name: string;
+  path: string;
+  parentId?: string;
+  fileIds: string[];
+};
+
+export type VirtualDocument = {
+  id: string;
+  directoryId: string;
+  name: string;
+  extension: string;
+  modified: string;
+  sizeLabel: string;
+  classification: string;
+  summary: string;
+  body: string[];
+  tags: string[];
+};

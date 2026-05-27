@@ -1,0 +1,15 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="160" height="160" fill="#030807"/>
+  <rect x="18" y="18" width="124" height="124" stroke="#53F38A" stroke-width="2"/>
+  <rect x="28" y="28" width="104" height="104" stroke="#24413B" stroke-width="1"/>
+  <path d="M80 35L118 57V101L80 123L42 101V57L80 35Z" stroke="#72D9FF" stroke-width="2"/>
+  <path d="M80 49L105 64V94L80 109L55 94V64L80 49Z" stroke="#53F38A" stroke-width="2"/>
+  <path d="M80 62L94 70V88L80 96L66 88V70L80 62Z" fill="#0B1715" stroke="#F3C667" stroke-width="2"/>
+  <path d="M40 80H66" stroke="#4D7F71" stroke-width="2"/>
+  <path d="M94 80H120" stroke="#4D7F71" stroke-width="2"/>
+  <path d="M80 40V62" stroke="#4D7F71" stroke-width="2"/>
+  <path d="M80 96V120" stroke="#4D7F71" stroke-width="2"/>
+  <circle cx="80" cy="80" r="4" fill="#53F38A"/>
+  <text x="80" y="18" text-anchor="middle" fill="#53F38A" font-family="monospace" font-size="9">BLACK BOX BUREAU</text>
+  <text x="80" y="148" text-anchor="middle" fill="#72D9FF" font-family="monospace" font-size="9">ARCHIVE NODE 07</text>
+</svg>

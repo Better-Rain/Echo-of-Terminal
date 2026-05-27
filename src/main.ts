@@ -239,7 +239,7 @@ function render(): void {
       <div class="scanlines" aria-hidden="true"></div>
       <header class="topbar">
         <div class="brand-block">
-          <span class="brand-mark">BB</span>
+          <img class="brand-mark" src="./assets/bureau-seal.svg" alt="" />
           <div>
             <h1>黑箱档案局</h1>
             <p>Internal Archive Console / Demonstration Build</p>

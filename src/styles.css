@@ -122,15 +122,12 @@ button {
 }
 
 .brand-mark {
-  display: grid;
   flex: 0 0 auto;
   width: 42px;
   height: 42px;
-  place-items: center;
   border: 1px solid var(--green);
   background: rgba(83, 243, 138, 0.09);
-  color: var(--green);
-  font-weight: 800;
+  object-fit: cover;
 }
 
 h1,

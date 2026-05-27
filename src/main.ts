@@ -30,14 +30,20 @@ if (!app) {
 
 const root = app;
 const profile = currentProfile;
+type MountStage = 'scanning' | 'local-mounted' | 'external-mounted';
+
+const localMountDelayMs = 900;
+const externalMountDelayMs = 2400;
+
 let selectedFileId = caseFiles[0].id;
 let selectedThreadId = chatThreads[0].id;
 let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
 let workspaceView: 'files' | 'records' = 'files';
+let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = 'local-session-log';
 let showUsbNotice = false;
-let usbNoticeScheduled = false;
+let mountSequenceScheduled = false;
 let loginError = '';
 
 function startBootSequence(): void {
@@ -53,25 +59,36 @@ function startBootSequence(): void {
 function enterArchiveShell(): void {
   appView = 'archive';
   workspaceView = 'files';
+  mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
   selectedDocumentId = 'local-session-log';
+  showUsbNotice = false;
   render();
-  scheduleUsbNotice();
+  scheduleMountSequence();
 }
 
-function scheduleUsbNotice(): void {
-  if (usbNoticeScheduled) return;
+function scheduleMountSequence(): void {
+  if (mountSequenceScheduled) return;
 
-  usbNoticeScheduled = true;
+  mountSequenceScheduled = true;
 
   window.setTimeout(() => {
     if (appView !== 'archive') return;
+    mountStage = 'local-mounted';
+    render();
+  }, localMountDelayMs);
+
+  window.setTimeout(() => {
+    if (appView !== 'archive') return;
+    mountStage = 'external-mounted';
     showUsbNotice = true;
     render();
-  }, 1200);
+  }, externalMountDelayMs);
 }
 
 function openUsbDirectory(): void {
+  if (mountStage !== 'external-mounted') return;
+
   workspaceView = 'files';
   selectedDirectoryId = 'usb-root';
   selectedDocumentId = 'commission-brief';
@@ -259,8 +276,25 @@ function getPermissionLabel(permission: Permission): string {
   return labels[permission];
 }
 
-function getSelectedDirectory(): VirtualDirectory {
-  return virtualDirectories.find((directory) => directory.id === selectedDirectoryId) ?? virtualDirectories[0];
+function getVisibleVolumes(): VirtualVolume[] {
+  if (mountStage === 'scanning') return [];
+
+  return virtualVolumes.filter((volume) => {
+    if (volume.id === 'local-cache') return true;
+    return mountStage === 'external-mounted';
+  });
+}
+
+function isVolumeVisible(volumeId: string): boolean {
+  return getVisibleVolumes().some((volume) => volume.id === volumeId);
+}
+
+function getSelectedDirectory(): VirtualDirectory | undefined {
+  const directory = virtualDirectories.find((item) => item.id === selectedDirectoryId);
+
+  if (directory && isVolumeVisible(directory.volumeId)) return directory;
+
+  return virtualDirectories.find((item) => item.id === 'local-root' && isVolumeVisible(item.volumeId));
 }
 
 function getSelectedDocument(directory: VirtualDirectory): VirtualDocument | undefined {
@@ -291,7 +325,21 @@ function renderWorkspaceSwitcher(): string {
 }
 
 function renderStorageTree(): string {
-  return virtualVolumes
+  const visibleVolumes = getVisibleVolumes();
+  const pendingExternalMarkup =
+    mountStage === 'local-mounted'
+      ? renderMountStatus(
+          'BUS WATCH',
+          '外部接口空闲',
+          '等待新接入的存储介质完成只读握手。',
+        )
+      : '';
+
+  if (!visibleVolumes.length) {
+    return renderMountStatus('MOUNT SCAN', '正在枚举本地存储', '读取会话缓存索引，尚未建立可见挂载点。');
+  }
+
+  const volumeRows = visibleVolumes
     .map((volume) => {
       const selected = selectedDirectoryId === volume.rootDirectoryId ? 'is-selected' : '';
 
@@ -307,6 +355,18 @@ function renderStorageTree(): string {
       `;
     })
     .join('');
+
+  return volumeRows + pendingExternalMarkup;
+}
+
+function renderMountStatus(label: string, title: string, message: string): string {
+  return `
+    <div class="mount-status">
+      <p class="eyebrow">${label}</p>
+      <strong>${title}</strong>
+      <span>${message}</span>
+    </div>
+  `;
 }
 
 function renderDirectoryList(directory: VirtualDirectory): string {
@@ -380,8 +440,44 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
 
 function renderFileManagerWorkspace(): string {
   const directory = getSelectedDirectory();
-  const selectedDocument = getSelectedDocument(directory);
-  const volume = getVolume(directory.volumeId);
+  const selectedDocument = directory ? getSelectedDocument(directory) : undefined;
+  const volume = directory ? getVolume(directory.volumeId) : undefined;
+
+  if (!directory || !volume) {
+    return `
+      <section class="workspace workspace--files">
+        <aside class="storage-panel" aria-label="存储介质">
+          <header class="panel-header panel-header--compact">
+            <div>
+              <p class="eyebrow">MOUNTS</p>
+              <h2>存储介质</h2>
+            </div>
+          </header>
+          <div class="storage-list">
+            ${renderStorageTree()}
+          </div>
+        </aside>
+
+        <section class="directory-panel" aria-label="目录内容">
+          <header class="panel-header">
+            <div>
+              <p class="eyebrow">CACHE BUS</p>
+              <h2>等待挂载</h2>
+            </div>
+          </header>
+          <div class="directory-meta">
+            <span>本地缓存索引尚未完成读取。</span>
+            <span>0 FILES</span>
+          </div>
+          <div class="document-list">
+            ${renderMountStatus('READING', '索引建立中', '文件列表会在本地存储完成挂载后显示。')}
+          </div>
+        </section>
+
+        ${renderDocumentPreview(undefined)}
+      </section>
+    `;
+  }
 
   return `
     <section class="workspace workspace--files">
@@ -708,13 +804,13 @@ function renderUsbNotice(): string {
   return `
     <aside class="usb-notice" aria-label="外接介质检测">
       <div>
-        <p class="eyebrow">DEVICE DETECTED</p>
-        <h2>检测到外接介质</h2>
+        <p class="eyebrow">REMOVABLE DRIVE</p>
+        <h2>可移动磁盘已插入</h2>
       </div>
-      <p>USB_AURORA_1907 已挂载为只读镜像。根目录包含新的委托文档。</p>
+      <p>请选择要对可移动磁盘 AURORA-1907 执行的操作。</p>
       <div class="usb-notice__actions">
-        <button type="button" data-usb-action="open">打开介质</button>
-        <button type="button" data-usb-action="dismiss">稍后</button>
+        <button type="button" data-usb-action="open">打开文件夹</button>
+        <button type="button" data-usb-action="dismiss">不执行操作</button>
       </div>
     </aside>
   `;

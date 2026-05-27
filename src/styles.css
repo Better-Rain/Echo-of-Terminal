@@ -635,6 +635,27 @@ h2 {
   overflow: auto;
 }
 
+.mount-status {
+  display: grid;
+  gap: 6px;
+  min-height: 90px;
+  padding: 12px;
+  border: 1px dashed rgba(77, 127, 113, 0.72);
+  background: rgba(3, 11, 10, 0.66);
+  color: var(--muted);
+}
+
+.mount-status strong {
+  color: #effff2;
+  font-size: 0.92rem;
+}
+
+.mount-status span {
+  color: var(--dim);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .storage-row,
 .document-row {
   display: grid;
@@ -736,7 +757,8 @@ h2 {
 }
 
 .document-body {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   gap: 12px;
   min-height: 0;
@@ -747,8 +769,10 @@ h2 {
 }
 
 .document-body p {
+  flex: 0 0 auto;
   padding-left: 12px;
   border-left: 2px solid rgba(77, 127, 113, 0.72);
+  line-height: 1.6;
 }
 
 .document-tags {

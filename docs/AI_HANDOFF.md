@@ -8,8 +8,8 @@ This document is for quickly onboarding another AI assistant or a new developmen
 - Type: pure frontend web puzzle game.
 - Stack: Vite + TypeScript + plain CSS.
 - Deployment target: GitHub Pages.
-- Repository: `https://github.com/Better-Rain/Echo-of-Terminal.git`
-- Local workspace used so far: `D:\programme\Vscode Projects\web_puzzle_game`
+- Repository: `git@github.com:Better-Rain/Echo-of-Terminal.git`
+- Local workspace used so far: `E:\Programs\Vscode Projects\web_puzzle_game`
 
 ## How To Run
 
@@ -38,6 +38,18 @@ After pushing to GitHub:
 
 `vite.config.ts` uses `base: './'`, so the app can be served from a GitHub Pages project path without hardcoding the repository name.
 
+## Progress Snapshot
+
+Last updated: 2026-05-27.
+
+- GitHub SSH remote is configured and `main` has been pushed to `git@github.com:Better-Rain/Echo-of-Terminal.git`.
+- First-stage login flow is playable: boot self-check -> readonly `访客#0719` login -> placeholder password `0719` -> auth feedback -> archive shell.
+- Second-stage entry now has a staged mount sequence: file manager scan -> delayed local cache mount -> delayed external media mount.
+- The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose.
+- USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
+- The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
+- Current verification command: `npm run build`.
+
 ## Current Player Flow
 
 1. Boot screen plays a short system self-check.
@@ -45,10 +57,11 @@ After pushing to GitHub:
 3. Current placeholder password is `0719`, derived from the username suffix.
 4. Successful auth shows readonly access notices.
 5. App enters the file manager workspace.
-6. After a short delay, a bottom-right external media notice appears.
-7. Clicking the notice opens the USB root directory.
-8. USB contains `委托说明.TXT`, which explains the task, readonly account, unknown original account owner, and time anomaly handling.
-9. Top navigation switches between `文件管理器` and `档案记录`.
+6. The file manager first shows a short mount scan; local cache appears after a brief delay.
+7. After a second delay, the external media appears to simulate the protagonist inserting the storage device, and a bottom-right OS-like removable-drive prompt appears.
+8. Clicking the notice opens the USB root directory.
+9. USB contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission document with a European-style ministry header and sign-off.
+10. Top navigation switches between `文件管理器` and `档案记录`.
 
 ## Current Structure
 
@@ -76,7 +89,7 @@ After pushing to GitHub:
 
 - Login puzzle is intentionally simple and can be replaced later.
 - Avatar/original account owner image is still a placeholder.
-- File manager currently has one USB document and one local cache log.
+- File manager currently has one delayed USB commission document and one local cache log.
 - Archive records and chat are sample content, not final story canon.
 
 ## Useful Git Checkpoints

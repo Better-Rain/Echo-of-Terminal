@@ -2,6 +2,7 @@ import './styles.css';
 import { roleDefinitions } from './data/access';
 import { caseFiles } from './data/cases';
 import { chatThreads } from './data/chats';
+import { loginStage } from './data/loginStage';
 import { currentProfile } from './data/player';
 import { evaluateAccess, findRoleDefinition, formatClearance } from './domain/access';
 import type {
@@ -10,9 +11,11 @@ import type {
   CaseFragment,
   ChatMessage,
   FileReviewStatus,
+  LoginStageConfig,
   Permission,
   PlayerProfile,
   RoleId,
+  TerminalLine,
 } from './domain/types';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -25,6 +28,159 @@ const root = app;
 const profile = currentProfile;
 let selectedFileId = caseFiles[0].id;
 let selectedThreadId = chatThreads[0].id;
+let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
+let loginError = '';
+
+function startBootSequence(): void {
+  render();
+
+  window.setTimeout(() => {
+    if (appView !== 'boot') return;
+    appView = 'login';
+    render();
+  }, loginStage.scanDurationMs);
+}
+
+function renderTerminalLineItem(line: TerminalLine, index: number): string {
+  const tone = line.tone ?? 'normal';
+
+  return `
+    <li class="boot-line boot-line--${tone}" style="--delay: ${index * 430}ms">
+      <span>[${line.tag}]</span>
+      <strong>${line.text}</strong>
+    </li>
+  `;
+}
+
+function renderBootScreen(config: LoginStageConfig): string {
+  return `
+    <main class="login-shell login-shell--boot">
+      <div class="scanlines" aria-hidden="true"></div>
+      <section class="boot-console" aria-label="系统自检">
+        <div class="boot-console__header">
+          <span>BOOT / LOCAL CACHE MODE</span>
+          <span>NODE-07</span>
+        </div>
+        <ul class="boot-lines">
+          ${config.scanLines.map(renderTerminalLineItem).join('')}
+        </ul>
+        <div class="boot-progress" aria-hidden="true">
+          <span></span>
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function renderAvatar(config: LoginStageConfig): string {
+  if (config.avatarSrc) {
+    return `<img src="${config.avatarSrc}" alt="${config.avatarAlt}" />`;
+  }
+
+  return `
+    <div class="avatar-placeholder">
+      <span>NO IMAGE</span>
+      <strong>${config.avatarPlaceholder}</strong>
+    </div>
+  `;
+}
+
+function renderLoginScreen(config: LoginStageConfig): string {
+  return `
+    <main class="login-shell">
+      <div class="scanlines" aria-hidden="true"></div>
+      <section class="login-card" aria-label="系统登录">
+        <header class="login-card__header">
+          <div>
+            <p class="eyebrow">ARCHIVE ACCESS</p>
+            <h1>黑箱档案局</h1>
+          </div>
+          <span>AUTH-GATE 01</span>
+        </header>
+
+        <div class="login-card__body">
+          <aside class="avatar-panel" aria-label="头像区域">
+            ${renderAvatar(config)}
+          </aside>
+
+          <form class="login-form" id="loginForm">
+            <label class="login-field">
+              <span>用户名</span>
+              <input type="text" value="${config.username}" readonly aria-readonly="true" />
+            </label>
+            <p class="login-hint">${config.usernameHint}</p>
+
+            <div class="last-login">
+              <span class="warning-icon" title="${config.lastLoginTooltip}" aria-label="${config.lastLoginTooltip}">!</span>
+              <span>${config.lastLogin}</span>
+            </div>
+
+            <label class="login-field">
+              <span>${config.passwordLabel}</span>
+              <input id="passwordInput" name="password" type="password" autocomplete="off" autofocus />
+            </label>
+            <p class="security-question">${config.securityQuestion}</p>
+            ${loginError ? `<p class="login-error">${loginError}</p>` : ''}
+
+            <button class="login-submit" type="submit">验证身份</button>
+          </form>
+        </div>
+
+        <footer class="login-card__footer">
+          <span>TIME SERVICE: FAILED</span>
+          <span>STORAGE: HISTORICAL RECORDS FOUND</span>
+        </footer>
+      </section>
+    </main>
+  `;
+}
+
+function renderAuthFeedback(config: LoginStageConfig): string {
+  return `
+    <main class="login-shell login-shell--auth">
+      <div class="scanlines" aria-hidden="true"></div>
+      <section class="auth-console" aria-label="身份验证结果">
+        <div class="boot-console__header">
+          <span>AUTHENTICATION</span>
+          <span>READ ONLY</span>
+        </div>
+        <ul class="boot-lines boot-lines--auth">
+          ${config.successLines.map(renderTerminalLineItem).join('')}
+        </ul>
+      </section>
+    </main>
+  `;
+}
+
+function bindLoginForm(): void {
+  const form = document.querySelector<HTMLFormElement>('#loginForm');
+  const input = document.querySelector<HTMLInputElement>('#passwordInput');
+
+  input?.focus();
+
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const formData = new FormData(form);
+    const password = String(formData.get('password') ?? '').trim();
+
+    if (!loginStage.acceptedPasswords.includes(password)) {
+      loginError = loginStage.failureMessage;
+      render();
+      return;
+    }
+
+    loginError = '';
+    appView = 'authenticating';
+    render();
+
+    window.setTimeout(() => {
+      if (appView !== 'authenticating') return;
+      appView = 'archive';
+      render();
+    }, loginStage.successDurationMs);
+  });
+}
 
 function getReviewLabel(status: FileReviewStatus): string {
   if (status === 'new') return '新档案';
@@ -281,6 +437,7 @@ function renderChatMessage(message: ChatMessage): string {
 function renderChat(): string {
   const thread = chatThreads.find((item) => item.id === selectedThreadId) ?? chatThreads[0];
   const threadAccess = evaluateAccess(profile, thread.access);
+  const canSendMessage = profile.permissions.includes('chat:message');
 
   if (!threadAccess.allowed) {
     return `
@@ -309,9 +466,14 @@ function renderChat(): string {
     <div class="chat-log">
       ${thread.messages.map(renderChatMessage).join('')}
     </div>
-    <form class="chat-input">
-      <input type="text" value="询问：沈医生的旧职位" aria-label="聊天输入" />
-      <button type="button">发送</button>
+    <form class="chat-input ${canSendMessage ? '' : 'chat-input--disabled'}">
+      <input
+        type="text"
+        value="${canSendMessage ? '询问：沈医生的旧职位' : '只读账号无法发送通信'}"
+        aria-label="聊天输入"
+        ${canSendMessage ? '' : 'readonly'}
+      />
+      <button type="button" ${canSendMessage ? '' : 'disabled'}>发送</button>
     </form>
   `;
 }
@@ -323,6 +485,22 @@ function renderTerminalLine(): string {
 }
 
 function render(): void {
+  if (appView === 'boot') {
+    root.innerHTML = renderBootScreen(loginStage);
+    return;
+  }
+
+  if (appView === 'login') {
+    root.innerHTML = renderLoginScreen(loginStage);
+    bindLoginForm();
+    return;
+  }
+
+  if (appView === 'authenticating') {
+    root.innerHTML = renderAuthFeedback(loginStage);
+    return;
+  }
+
   const activeFile = caseFiles.find((file) => file.id === selectedFileId) ?? caseFiles[0];
 
   root.innerHTML = `
@@ -382,4 +560,4 @@ function render(): void {
   });
 }
 
-render();
+startBootSequence();

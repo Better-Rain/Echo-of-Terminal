@@ -3,11 +3,11 @@ import type { RoleDefinition } from '../domain/types';
 export const roleDefinitions: RoleDefinition[] = [
   {
     id: 'guest',
-    name: '访客',
+    name: '只读访客',
     shortName: 'GUEST',
-    clearanceCap: 0,
-    permissions: ['case:read-redacted'],
-    description: '只能阅读公开摘要和已解封提示。',
+    clearanceCap: 2,
+    permissions: ['case:read', 'case:read-redacted', 'chat:read', 'hint:view'],
+    description: '可阅读基础档案和通信记录，但不能写入、解锁或修改任何字段。',
   },
   {
     id: 'trainee',

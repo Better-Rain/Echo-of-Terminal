@@ -103,3 +103,30 @@ export type ChatThread = {
   access: AccessRule;
   messages: ChatMessage[];
 };
+
+export type TerminalTone = 'normal' | 'warning' | 'success';
+
+export type TerminalLine = {
+  tag: string;
+  text: string;
+  tone?: TerminalTone;
+};
+
+export type LoginStageConfig = {
+  id: string;
+  scanDurationMs: number;
+  successDurationMs: number;
+  scanLines: TerminalLine[];
+  username: string;
+  usernameHint: string;
+  avatarSrc?: string;
+  avatarAlt: string;
+  avatarPlaceholder: string;
+  passwordLabel: string;
+  securityQuestion: string;
+  acceptedPasswords: string[];
+  lastLogin: string;
+  lastLoginTooltip: string;
+  failureMessage: string;
+  successLines: TerminalLine[];
+};

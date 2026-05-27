@@ -92,6 +92,304 @@ button {
   opacity: 0.55;
 }
 
+.login-shell {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  padding: 18px;
+  place-items: center;
+  isolation: isolate;
+}
+
+.login-shell::before {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  content: "";
+  background:
+    linear-gradient(rgba(83, 243, 138, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(114, 217, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.92), rgba(0, 0, 0, 0.25));
+}
+
+.boot-console,
+.auth-console,
+.login-card {
+  width: min(880px, 100%);
+  border: 1px solid var(--line-strong);
+  background:
+    linear-gradient(180deg, rgba(10, 27, 24, 0.95), rgba(4, 9, 9, 0.98)),
+    var(--panel);
+  box-shadow: 0 24px 80px var(--shadow);
+}
+
+.boot-console,
+.auth-console {
+  max-width: 760px;
+}
+
+.boot-console__header,
+.login-card__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.login-card__footer {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.boot-lines {
+  display: grid;
+  gap: 12px;
+  min-height: 212px;
+  margin: 0;
+  padding: 28px;
+  list-style: none;
+}
+
+.boot-lines--auth {
+  min-height: 180px;
+}
+
+.boot-line {
+  display: grid;
+  grid-template-columns: minmax(108px, auto) 1fr;
+  gap: 12px;
+  opacity: 0;
+  color: var(--text);
+  animation: terminal-reveal 280ms steps(2, end) forwards;
+  animation-delay: var(--delay);
+}
+
+.boot-line span {
+  color: var(--green);
+  font-weight: 800;
+}
+
+.boot-line strong {
+  color: #effff2;
+  font-weight: 500;
+}
+
+.boot-line--warning span,
+.boot-line--warning strong {
+  color: var(--amber);
+}
+
+.boot-line--success span,
+.boot-line--success strong {
+  color: var(--green);
+}
+
+.boot-progress {
+  height: 3px;
+  margin: 0 28px 28px;
+  background: rgba(36, 65, 59, 0.85);
+  overflow: hidden;
+}
+
+.boot-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--cyan), var(--amber));
+  transform-origin: left;
+  animation: boot-progress 2.6s linear forwards;
+}
+
+.login-card {
+  max-width: 920px;
+}
+
+.login-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.login-card__header > span {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  font-size: 0.76rem;
+}
+
+.login-card__body {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.36fr) minmax(320px, 0.64fr);
+  gap: 1px;
+  background: var(--line);
+}
+
+.avatar-panel,
+.login-form {
+  background: rgba(3, 8, 7, 0.88);
+}
+
+.avatar-panel {
+  display: grid;
+  min-height: 360px;
+  padding: 18px;
+  place-items: center;
+}
+
+.avatar-panel img,
+.avatar-placeholder {
+  width: min(260px, 100%);
+  aspect-ratio: 1;
+  border: 1px solid rgba(83, 243, 138, 0.62);
+  background:
+    linear-gradient(rgba(83, 243, 138, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(83, 243, 138, 0.05) 1px, transparent 1px),
+    rgba(0, 0, 0, 0.28);
+  background-size: 14px 14px;
+}
+
+.avatar-panel img {
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  display: grid;
+  gap: 10px;
+  place-items: center;
+  padding: 18px;
+  color: var(--dim);
+  text-align: center;
+}
+
+.avatar-placeholder span {
+  color: var(--red);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.avatar-placeholder strong {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.login-form {
+  display: grid;
+  align-content: center;
+  gap: 13px;
+  min-height: 360px;
+  padding: 28px;
+}
+
+.login-field {
+  display: grid;
+  gap: 7px;
+}
+
+.login-field span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.login-field input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid rgba(77, 127, 113, 0.72);
+  border-radius: 0;
+  outline: none;
+  background: #020706;
+  color: var(--text);
+  padding: 8px 10px;
+}
+
+.login-field input[readonly] {
+  color: #9bb4aa;
+  background: rgba(255, 255, 255, 0.045);
+  cursor: default;
+}
+
+.login-field input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(83, 243, 138, 0.14);
+}
+
+.login-hint,
+.security-question {
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+.last-login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(243, 198, 103, 0.62);
+  color: #fff2cb;
+  background: rgba(243, 198, 103, 0.07);
+  font-size: 0.86rem;
+}
+
+.warning-icon {
+  display: grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: help;
+}
+
+.login-error {
+  color: #ffd7d4;
+  font-size: 0.84rem;
+}
+
+.login-submit {
+  justify-self: start;
+  min-width: 128px;
+  height: 38px;
+  border: 1px solid var(--green);
+  background: rgba(83, 243, 138, 0.1);
+  color: var(--green);
+  cursor: pointer;
+}
+
+.login-submit:hover {
+  background: rgba(83, 243, 138, 0.18);
+}
+
+@keyframes terminal-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes boot-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .topbar,
 .terminal-bar,
 .sidebar,
@@ -635,6 +933,20 @@ h2 {
   background: rgba(83, 243, 138, 0.18);
 }
 
+.chat-input--disabled input {
+  color: var(--dim);
+}
+
+.chat-input--disabled button {
+  border-color: var(--line);
+  color: var(--dim);
+  cursor: not-allowed;
+}
+
+.chat-input--disabled button:hover {
+  background: rgba(83, 243, 138, 0.1);
+}
+
 .terminal-bar {
   display: flex;
   align-items: center;
@@ -667,14 +979,49 @@ h2 {
 }
 
 @media (max-width: 720px) {
-  .archive-shell {
+  .archive-shell,
+  .login-shell {
     padding: 10px;
   }
 
   .topbar,
-  .terminal-bar {
+  .terminal-bar,
+  .login-card__header,
+  .login-card__footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .boot-lines {
+    min-height: 260px;
+    padding: 20px;
+  }
+
+  .boot-line {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .boot-progress {
+    margin: 0 20px 20px;
+  }
+
+  .login-card__body {
+    grid-template-columns: 1fr;
+  }
+
+  .avatar-panel {
+    min-height: 220px;
+  }
+
+  .avatar-panel img,
+  .avatar-placeholder {
+    width: min(180px, 100%);
+  }
+
+  .login-form {
+    min-height: auto;
+    padding: 20px;
   }
 
   .system-readout {

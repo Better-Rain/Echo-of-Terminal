@@ -183,10 +183,10 @@ function bindLoginForm(): void {
 }
 
 function getReviewLabel(status: FileReviewStatus): string {
-  if (status === 'new') return '新档案';
-  if (status === 'solved') return '已复核';
-  if (status === 'sealed') return '封存';
-  return '调查中';
+  if (status === 'new') return '新增';
+  if (status === 'solved') return '已校验';
+  if (status === 'sealed') return '受限';
+  return '可读取';
 }
 
 function getStatusClass(file: CaseFile, player: PlayerProfile): string {
@@ -199,7 +199,7 @@ function getStatusClass(file: CaseFile, player: PlayerProfile): string {
 function getStatusLabel(file: CaseFile, player: PlayerProfile): string {
   const access = evaluateAccess(player, file.access);
 
-  if (!access.allowed) return '需授权';
+  if (!access.allowed) return '授权不足';
   return getReviewLabel(file.reviewStatus);
 }
 
@@ -212,10 +212,10 @@ function getPermissionLabel(permission: Permission): string {
     'case:read': '读取档案',
     'case:read-redacted': '读取公开摘要',
     'case:read-restricted': '读取限制字段',
-    'case:unlock': '解锁封存档案',
+    'case:unlock': '解除访问限制',
     'chat:read': '读取通信',
     'chat:message': '发送通信',
-    'hint:view': '查看提示',
+    'hint:view': '读取内部备注',
     'session:impersonate': '身份模拟',
   };
 
@@ -251,7 +251,7 @@ function renderRoleSummary(): string {
     .join('');
 
   return `
-    <section class="session-card" aria-label="当前身份">
+    <section class="session-card" aria-label="会话身份">
       <div>
         <p class="eyebrow">SESSION ROLE</p>
         <h2>${activeRole?.name ?? profile.activeRole}</h2>
@@ -316,7 +316,7 @@ function renderRequirementList(rule: AccessRule): string {
   }
 
   if (rule.solvedPuzzles?.length) {
-    items.push(`已解谜题：${rule.solvedPuzzles.join(' / ')}`);
+    items.push(`已通过校验：${rule.solvedPuzzles.join(' / ')}`);
   }
 
   if (rule.note) {
@@ -328,10 +328,10 @@ function renderRequirementList(rule: AccessRule): string {
 
 function renderRestrictedFile(file: CaseFile): string {
   return `
-    <section class="record-panel" aria-label="当前档案">
+    <section class="record-panel" aria-label="档案记录">
       <header class="panel-header">
         <div>
-          <p class="eyebrow">RESTRICTED FILE</p>
+          <p class="eyebrow">ACCESS RESTRICTED</p>
           <h2>${file.code} / ${file.title}</h2>
         </div>
         <div class="clearance-block clearance-block--denied">
@@ -346,8 +346,8 @@ function renderRestrictedFile(file: CaseFile): string {
           <strong>${file.date}</strong>
         </div>
         <div class="field">
-          <span>访问状态</span>
-          <strong>需授权</strong>
+          <span>访问结果</span>
+          <strong>授权不足</strong>
         </div>
       </div>
 
@@ -357,13 +357,13 @@ function renderRestrictedFile(file: CaseFile): string {
 
       <div class="access-panel">
         <p class="eyebrow">ACCESS RULE</p>
-        <h3>当前身份无法读取完整档案</h3>
+        <h3>凭据不满足读取条件</h3>
         ${renderRequirementList(file.access)}
       </div>
 
-      <div class="clue-box">
-        <span>当前提示</span>
-        <p>${file.clue}</p>
+      <div class="operator-note">
+        <span>内部备注</span>
+        <p>${file.internalNote}</p>
       </div>
     </section>
   `;
@@ -377,10 +377,10 @@ function renderActiveFile(file: CaseFile): string {
   }
 
   return `
-    <section class="record-panel" aria-label="当前档案">
+    <section class="record-panel" aria-label="档案记录">
       <header class="panel-header">
         <div>
-          <p class="eyebrow">ACTIVE FILE</p>
+          <p class="eyebrow">RECORD</p>
           <h2>${file.code} / ${file.title}</h2>
         </div>
         <div class="clearance-block">
@@ -395,7 +395,7 @@ function renderActiveFile(file: CaseFile): string {
           <strong>${file.date}</strong>
         </div>
         <div class="field">
-          <span>状态</span>
+          <span>记录状态</span>
           <strong>${getReviewLabel(file.reviewStatus)}</strong>
         </div>
       </div>
@@ -403,16 +403,16 @@ function renderActiveFile(file: CaseFile): string {
       <p class="summary">${file.summary}</p>
 
       <div class="section-title">
-        <span>碎片记录</span>
-        <span>FRAGMENTS</span>
+        <span>记录条目</span>
+        <span>ENTRIES</span>
       </div>
       <ul class="fragments">
         ${renderFragments(file)}
       </ul>
 
-      <div class="clue-box">
-        <span>当前提示</span>
-        <p>${file.clue}</p>
+      <div class="operator-note">
+        <span>内部备注</span>
+        <p>${file.internalNote}</p>
       </div>
     </section>
   `;
@@ -449,7 +449,7 @@ function renderChat(): string {
       </header>
       <div class="access-panel access-panel--chat">
         <p class="eyebrow">CHANNEL LOCKED</p>
-        <h3>当前身份无法读取通信</h3>
+        <h3>凭据不满足信道读取条件</h3>
         ${renderRequirementList(thread.access)}
       </div>
     `;
@@ -466,15 +466,14 @@ function renderChat(): string {
     <div class="chat-log">
       ${thread.messages.map(renderChatMessage).join('')}
     </div>
-    <form class="chat-input ${canSendMessage ? '' : 'chat-input--disabled'}">
-      <input
-        type="text"
-        value="${canSendMessage ? '询问：沈医生的旧职位' : '只读账号无法发送通信'}"
-        aria-label="聊天输入"
-        ${canSendMessage ? '' : 'readonly'}
-      />
-      <button type="button" ${canSendMessage ? '' : 'disabled'}>发送</button>
-    </form>
+    ${
+      canSendMessage
+        ? `<form class="chat-input">
+            <input type="text" value="询问：沈医生的旧职位" aria-label="聊天输入" />
+            <button type="button">发送</button>
+          </form>`
+        : `<div class="chat-readonly">只读镜像：当前账号不具备写入信道权限。</div>`
+    }
   `;
 }
 

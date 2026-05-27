@@ -79,7 +79,7 @@ export type CaseFile = {
   teaser: string;
   summary: string;
   fragments: CaseFragment[];
-  clue: string;
+  internalNote: string;
   linkedThreadIds: string[];
   puzzleIds: string[];
   tags: string[];

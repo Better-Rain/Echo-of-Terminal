@@ -1,124 +1,19 @@
 import './styles.css';
-
-type FileStatus = 'locked' | 'open' | 'solved';
-
-type CaseFile = {
-  id: string;
-  code: string;
-  title: string;
-  unit: string;
-  date: string;
-  status: FileStatus;
-  clearance: string;
-  summary: string;
-  fragments: string[];
-  clue: string;
-};
-
-type ChatMessage = {
-  from: 'operator' | 'contact' | 'system';
-  text: string;
-  time: string;
-};
-
-const caseFiles: CaseFile[] = [
-  {
-    id: 'a17',
-    code: 'A-17',
-    title: '失联观测站',
-    unit: '外勤记录 / 北线',
-    date: '1997-11-03',
-    status: 'open',
-    clearance: 'L2',
-    summary:
-      '三号观测站在风暴前切断外部通信。最后一条自动上报只包含一组异常气压读数和一句被截断的值班备注。',
-    fragments: [
-      '23:41 备用电源切换成功。',
-      '23:58 主天线转向 061 度，非计划动作。',
-      '00:12 值班员备注：不要相信灯塔给出的第二个坐标。',
-    ],
-    clue: '061 并不一定是方向，也可能是档案编号。',
-  },
-  {
-    id: 'b04',
-    code: 'B-04',
-    title: '匿名信件批次',
-    unit: '文档复核 / 城区',
-    date: '2002-04-18',
-    status: 'locked',
-    clearance: 'L3',
-    summary:
-      '同一台打字机留下了七封匿名信。前六封内容互相矛盾，第七封只写了收件人的旧职位。',
-    fragments: [
-      '纸张边缘有重复裁切痕。',
-      '第七封信没有署名，但邮戳时间早于其余信件。',
-      '归档员手写备注：先问沈医生，他知道“旧职位”指谁。',
-    ],
-    clue: '聊天记录可能会给出第一把钥匙。',
-  },
-  {
-    id: 'c61',
-    code: 'C-61',
-    title: '灯塔维修单',
-    unit: '资产维护 / 海岸',
-    date: '1988-09-21',
-    status: 'open',
-    clearance: 'L2',
-    summary:
-      '维修单显示灯塔透镜在失踪案发生前被人为调暗。维护日志中有一段被删去的验收码。',
-    fragments: [
-      '更换件：二级透镜、旧式调光盘、短波收发模块。',
-      '验收人签名只留下两个字母：S.D.',
-      '验收码字段被涂黑，但涂黑长度为四位。',
-    ],
-    clue: '四位验收码不一定来自维修单本身。',
-  },
-  {
-    id: 'd12',
-    code: 'D-12',
-    title: '内部通话节录',
-    unit: '监听转写 / 未核验',
-    date: '2010-06-09',
-    status: 'solved',
-    clearance: 'L1',
-    summary:
-      '这份节录被反复调用，因为它首次出现了“黑箱档案局”这个内部代称。转写质量很差，但语气不像伪造。',
-    fragments: [
-      '甲：把钥匙放回档案柜，不要交给外勤。',
-      '乙：那如果他们已经看见坐标？',
-      '甲：让他们以为自己卡关了。',
-    ],
-    clue: '这是一份教学档案，用来暗示游戏不会故意卡死玩家。',
-  },
-];
-
-const chatMessages: ChatMessage[] = [
-  {
-    from: 'system',
-    text: '安全信道已建立。当前会话不会上传至中央档案库。',
-    time: '00:01',
-  },
-  {
-    from: 'contact',
-    text: '你现在能看到 A-17 和 C-61，对吧？先别急着解锁 B-04。灯塔那份维修单里有个名字缩写。',
-    time: '00:03',
-  },
-  {
-    from: 'operator',
-    text: 'S.D. 是谁？',
-    time: '00:04',
-  },
-  {
-    from: 'contact',
-    text: '沈医生。以前不叫医生，档案里写的是“声学顾问”。匿名信第七封应该和他有关。',
-    time: '00:05',
-  },
-  {
-    from: 'contact',
-    text: '如果某处需要四位码，先试着把“061”当作档案编号，而不是角度。',
-    time: '00:08',
-  },
-];
+import { roleDefinitions } from './data/access';
+import { caseFiles } from './data/cases';
+import { chatThreads } from './data/chats';
+import { currentProfile } from './data/player';
+import { evaluateAccess, findRoleDefinition, formatClearance } from './domain/access';
+import type {
+  AccessRule,
+  CaseFile,
+  CaseFragment,
+  ChatMessage,
+  FileReviewStatus,
+  Permission,
+  PlayerProfile,
+  RoleId,
+} from './domain/types';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
@@ -127,18 +22,57 @@ if (!app) {
 }
 
 const root = app;
+const profile = currentProfile;
 let selectedFileId = caseFiles[0].id;
+let selectedThreadId = chatThreads[0].id;
 
-function getStatusLabel(status: FileStatus): string {
+function getReviewLabel(status: FileReviewStatus): string {
+  if (status === 'new') return '新档案';
   if (status === 'solved') return '已复核';
-  if (status === 'locked') return '权限不足';
-  return '可查阅';
+  if (status === 'sealed') return '封存';
+  return '调查中';
+}
+
+function getStatusClass(file: CaseFile, player: PlayerProfile): string {
+  const access = evaluateAccess(player, file.access);
+
+  if (!access.allowed) return 'locked';
+  return file.reviewStatus;
+}
+
+function getStatusLabel(file: CaseFile, player: PlayerProfile): string {
+  const access = evaluateAccess(player, file.access);
+
+  if (!access.allowed) return '需授权';
+  return getReviewLabel(file.reviewStatus);
+}
+
+function getRoleName(roleId: RoleId): string {
+  return findRoleDefinition(roleDefinitions, roleId)?.name ?? roleId;
+}
+
+function getPermissionLabel(permission: Permission): string {
+  const labels: Record<Permission, string> = {
+    'case:read': '读取档案',
+    'case:read-redacted': '读取公开摘要',
+    'case:read-restricted': '读取限制字段',
+    'case:unlock': '解锁封存档案',
+    'chat:read': '读取通信',
+    'chat:message': '发送通信',
+    'hint:view': '查看提示',
+    'session:impersonate': '身份模拟',
+  };
+
+  return labels[permission];
 }
 
 function renderFileList(): string {
   return caseFiles
     .map((file) => {
       const selected = file.id === selectedFileId ? 'is-selected' : '';
+      const statusClass = getStatusClass(file, profile);
+      const access = evaluateAccess(profile, file.access);
+
       return `
         <button class="file-row ${selected}" type="button" data-file-id="${file.id}">
           <span class="file-row__code">${file.code}</span>
@@ -146,43 +80,146 @@ function renderFileList(): string {
             <span class="file-row__title">${file.title}</span>
             <span class="file-row__meta">${file.unit}</span>
           </span>
-          <span class="status-pill status-pill--${file.status}">${getStatusLabel(file.status)}</span>
+          <span class="status-pill status-pill--${statusClass}">${getStatusLabel(file, profile)}</span>
+          <span class="access-stub">${access.allowed ? file.classification : 'LOCK / ' + file.classification}</span>
         </button>
       `;
     })
     .join('');
 }
 
-function renderFragments(file: CaseFile): string {
-  return file.fragments
-    .map(
-      (fragment, index) => `
-        <li>
-          <span class="fragment-index">${String(index + 1).padStart(2, '0')}</span>
-          <span>${fragment}</span>
-        </li>
-      `,
-    )
+function renderRoleSummary(): string {
+  const activeRole = findRoleDefinition(roleDefinitions, profile.activeRole);
+  const roleTags = profile.roles
+    .map((roleId) => `<span class="role-tag">${getRoleName(roleId)}</span>`)
     .join('');
+
+  return `
+    <section class="session-card" aria-label="当前身份">
+      <div>
+        <p class="eyebrow">SESSION ROLE</p>
+        <h2>${activeRole?.name ?? profile.activeRole}</h2>
+      </div>
+      <dl class="session-grid">
+        <div>
+          <dt>调查员</dt>
+          <dd>${profile.displayName}</dd>
+        </div>
+        <div>
+          <dt>权限级别</dt>
+          <dd>${formatClearance(profile.clearanceLevel)}</dd>
+        </div>
+      </dl>
+      <div class="role-stack">${roleTags}</div>
+    </section>
+  `;
 }
 
-function renderChat(): string {
-  return chatMessages
-    .map(
-      (message) => `
-        <article class="chat-message chat-message--${message.from}">
-          <div class="chat-message__meta">
-            <span>${message.from === 'operator' ? '调查员' : message.from === 'contact' ? '线人' : '系统'}</span>
-            <time>${message.time}</time>
-          </div>
-          <p>${message.text}</p>
-        </article>
-      `,
-    )
-    .join('');
+function renderFragments(file: CaseFile): string {
+  return file.fragments.map((fragment, index) => renderFragment(file, fragment, index)).join('');
+}
+
+function renderFragment(file: CaseFile, fragment: CaseFragment, index: number): string {
+  const rule = fragment.access ?? file.access;
+  const access = evaluateAccess(profile, rule);
+  const body = access.allowed ? fragment.body : fragment.redactedText ?? '权限不足：该字段被遮蔽。';
+  const redactedClass = access.allowed ? '' : 'is-redacted';
+
+  return `
+    <li class="${redactedClass}">
+      <span class="fragment-index">${String(index + 1).padStart(2, '0')}</span>
+      <span>
+        <strong>${fragment.label}</strong>
+        ${body}
+      </span>
+    </li>
+  `;
+}
+
+function renderRequirementList(rule: AccessRule): string {
+  const items: string[] = [];
+
+  if (rule.minClearance !== undefined) {
+    items.push(`最低权限 ${formatClearance(rule.minClearance)}`);
+  }
+
+  if (rule.anyRoles?.length) {
+    items.push(`任一身份：${rule.anyRoles.map(getRoleName).join(' / ')}`);
+  }
+
+  if (rule.allRoles?.length) {
+    items.push(`必须身份：${rule.allRoles.map(getRoleName).join(' + ')}`);
+  }
+
+  if (rule.permissions?.length) {
+    items.push(`权限标记：${rule.permissions.map(getPermissionLabel).join(' / ')}`);
+  }
+
+  if (rule.discoveredFlags?.length) {
+    items.push(`已发现线索：${rule.discoveredFlags.join(' / ')}`);
+  }
+
+  if (rule.solvedPuzzles?.length) {
+    items.push(`已解谜题：${rule.solvedPuzzles.join(' / ')}`);
+  }
+
+  if (rule.note) {
+    items.push(rule.note);
+  }
+
+  return `<ul class="access-list">${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+}
+
+function renderRestrictedFile(file: CaseFile): string {
+  return `
+    <section class="record-panel" aria-label="当前档案">
+      <header class="panel-header">
+        <div>
+          <p class="eyebrow">RESTRICTED FILE</p>
+          <h2>${file.code} / ${file.title}</h2>
+        </div>
+        <div class="clearance-block clearance-block--denied">
+          <span>要求</span>
+          <strong>${file.classification}</strong>
+        </div>
+      </header>
+
+      <div class="record-grid">
+        <div class="field">
+          <span>归档日期</span>
+          <strong>${file.date}</strong>
+        </div>
+        <div class="field">
+          <span>访问状态</span>
+          <strong>需授权</strong>
+        </div>
+      </div>
+
+      <div class="summary summary--restricted">
+        <p>${file.teaser}</p>
+      </div>
+
+      <div class="access-panel">
+        <p class="eyebrow">ACCESS RULE</p>
+        <h3>当前身份无法读取完整档案</h3>
+        ${renderRequirementList(file.access)}
+      </div>
+
+      <div class="clue-box">
+        <span>当前提示</span>
+        <p>${file.clue}</p>
+      </div>
+    </section>
+  `;
 }
 
 function renderActiveFile(file: CaseFile): string {
+  const access = evaluateAccess(profile, file.access);
+
+  if (!access.allowed) {
+    return renderRestrictedFile(file);
+  }
+
   return `
     <section class="record-panel" aria-label="当前档案">
       <header class="panel-header">
@@ -191,8 +228,8 @@ function renderActiveFile(file: CaseFile): string {
           <h2>${file.code} / ${file.title}</h2>
         </div>
         <div class="clearance-block">
-          <span>权限</span>
-          <strong>${file.clearance}</strong>
+          <span>分级</span>
+          <strong>${file.classification}</strong>
         </div>
       </header>
 
@@ -203,7 +240,7 @@ function renderActiveFile(file: CaseFile): string {
         </div>
         <div class="field">
           <span>状态</span>
-          <strong>${getStatusLabel(file.status)}</strong>
+          <strong>${getReviewLabel(file.reviewStatus)}</strong>
         </div>
       </div>
 
@@ -225,10 +262,64 @@ function renderActiveFile(file: CaseFile): string {
   `;
 }
 
+function renderChatMessage(message: ChatMessage): string {
+  const access = evaluateAccess(profile, message.access);
+  const text = access.allowed ? message.text : message.redactedText ?? '权限不足：消息被遮蔽。';
+  const redactedClass = access.allowed ? '' : 'is-redacted';
+
+  return `
+    <article class="chat-message chat-message--${message.from} ${redactedClass}">
+      <div class="chat-message__meta">
+        <span>${message.speaker}</span>
+        <time>${message.time}</time>
+      </div>
+      <p>${text}</p>
+    </article>
+  `;
+}
+
+function renderChat(): string {
+  const thread = chatThreads.find((item) => item.id === selectedThreadId) ?? chatThreads[0];
+  const threadAccess = evaluateAccess(profile, thread.access);
+
+  if (!threadAccess.allowed) {
+    return `
+      <header class="panel-header panel-header--compact">
+        <div>
+          <p class="eyebrow">SECURE CHAT</p>
+          <h2>${thread.title}</h2>
+        </div>
+      </header>
+      <div class="access-panel access-panel--chat">
+        <p class="eyebrow">CHANNEL LOCKED</p>
+        <h3>当前身份无法读取通信</h3>
+        ${renderRequirementList(thread.access)}
+      </div>
+    `;
+  }
+
+  return `
+    <header class="panel-header panel-header--compact">
+      <div>
+        <p class="eyebrow">${thread.channel}</p>
+        <h2>${thread.title}</h2>
+      </div>
+      <span class="online-dot" title="在线"></span>
+    </header>
+    <div class="chat-log">
+      ${thread.messages.map(renderChatMessage).join('')}
+    </div>
+    <form class="chat-input">
+      <input type="text" value="询问：沈医生的旧职位" aria-label="聊天输入" />
+      <button type="button">发送</button>
+    </form>
+  `;
+}
+
 function renderTerminalLine(): string {
-  const openCount = caseFiles.filter((file) => file.status === 'open').length;
-  const solvedCount = caseFiles.filter((file) => file.status === 'solved').length;
-  return `SYS: ${caseFiles.length} FILES MOUNTED / ${openCount} OPEN / ${solvedCount} VERIFIED / LOCAL SAVE READY`;
+  const readableCount = caseFiles.filter((file) => evaluateAccess(profile, file.access).allowed).length;
+  const solvedCount = caseFiles.filter((file) => file.reviewStatus === 'solved').length;
+  return `SYS: ${caseFiles.length} FILES MOUNTED / ${readableCount} READABLE / ${solvedCount} VERIFIED / ROLE ${profile.activeRole.toUpperCase()}`;
 }
 
 function render(): void {
@@ -259,9 +350,10 @@ function render(): void {
               <h2>档案索引</h2>
             </div>
           </div>
+          ${renderRoleSummary()}
           <div class="search-strip">
             <span>QUERY</span>
-            <input type="text" value="北线 灯塔 匿名信" aria-label="档案搜索" />
+            <input type="text" value="北线 灯塔 匿名信 权限" aria-label="档案搜索" />
           </div>
           <nav class="file-list">
             ${renderFileList()}
@@ -271,20 +363,7 @@ function render(): void {
         ${renderActiveFile(activeFile)}
 
         <aside class="chat-panel" aria-label="聊天线索">
-          <header class="panel-header panel-header--compact">
-            <div>
-              <p class="eyebrow">SECURE CHAT</p>
-              <h2>线人通信</h2>
-            </div>
-            <span class="online-dot" title="在线"></span>
-          </header>
-          <div class="chat-log">
-            ${renderChat()}
-          </div>
-          <form class="chat-input">
-            <input type="text" value="询问：沈医生的旧职位" aria-label="聊天输入" />
-            <button type="button">发送</button>
-          </form>
+          ${renderChat()}
         </aside>
       </section>
 

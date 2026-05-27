@@ -318,12 +318,79 @@ h2 {
   color: var(--green);
 }
 
+.status-pill--new {
+  color: var(--amber);
+}
+
 .status-pill--locked {
   color: var(--red);
 }
 
 .status-pill--solved {
   color: var(--cyan);
+}
+
+.status-pill--sealed {
+  color: var(--violet);
+}
+
+.access-stub {
+  grid-column: 1 / -1;
+  color: var(--dim);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+.session-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(114, 217, 255, 0.045);
+}
+
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.session-grid div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(36, 65, 59, 0.8);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.session-grid dt,
+.session-grid dd {
+  margin: 0;
+}
+
+.session-grid dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.session-grid dd {
+  margin-top: 3px;
+  color: #effff2;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.role-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-tag {
+  padding: 2px 6px;
+  border: 1px solid rgba(114, 217, 255, 0.55);
+  color: var(--cyan);
+  font-size: 0.68rem;
 }
 
 .record-panel {
@@ -334,10 +401,17 @@ h2 {
 
 .clearance-block {
   min-width: 72px;
+  max-width: 132px;
   padding: 7px 9px;
   border: 1px solid var(--amber);
   color: var(--amber);
   text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.clearance-block--denied {
+  border-color: var(--red);
+  color: var(--red);
 }
 
 .clearance-block span,
@@ -380,6 +454,14 @@ h2 {
   font-size: 0.98rem;
 }
 
+.summary--restricted {
+  color: #ffd7d4;
+}
+
+.summary--restricted p {
+  margin: 0;
+}
+
 .section-title {
   display: flex;
   justify-content: space-between;
@@ -406,6 +488,19 @@ h2 {
   background: rgba(255, 255, 255, 0.025);
 }
 
+.fragments li.is-redacted {
+  border-left-color: var(--red);
+  color: #ffd7d4;
+  background: rgba(255, 106, 99, 0.055);
+}
+
+.fragments strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .fragment-index {
   color: var(--amber);
   font-weight: 800;
@@ -426,6 +521,32 @@ h2 {
 .clue-box p {
   margin-top: 5px;
   color: #fff2cb;
+}
+
+.access-panel {
+  margin: 18px;
+  padding: 16px;
+  border: 1px solid rgba(255, 106, 99, 0.62);
+  background: rgba(255, 106, 99, 0.055);
+}
+
+.access-panel--chat {
+  margin: 14px;
+}
+
+.access-panel h3 {
+  margin: 0 0 10px;
+  color: #fff1ef;
+  font-size: 0.98rem;
+}
+
+.access-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: #ffd7d4;
+  font-size: 0.84rem;
 }
 
 .online-dot {
@@ -478,6 +599,15 @@ h2 {
   padding: 9px;
   color: #e4f8e7;
   font-size: 0.88rem;
+}
+
+.chat-message.is-redacted {
+  border-color: rgba(255, 106, 99, 0.62);
+  background: rgba(255, 106, 99, 0.055);
+}
+
+.chat-message.is-redacted p {
+  color: #ffd7d4;
 }
 
 .chat-input {

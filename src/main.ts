@@ -868,58 +868,56 @@ function renderUtilityTabs(): string {
 
 function renderShortwaveTool(): string {
   return `
-    <div class="shortwave-app">
-      <section class="utility-card shortwave-tuner">
-        <header class="utility-card__header">
-          <span>/dev/radio0</span>
-          <strong>RX-SHORTWAVE</strong>
-        </header>
-        <div class="frequency-readout">
-          <span>FREQ</span>
-          <strong>6.107 MHz</strong>
-          <em>AM / NARROW</em>
-        </div>
-        <div class="signal-meter" aria-label="信号强度">
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <div class="frequency-list">
-          <button type="button" class="is-active">6.107 MHz</button>
-          <button type="button">7.190 MHz</button>
-          <button type="button">9.421 MHz</button>
-          <button type="button">11.719 MHz</button>
-        </div>
-      </section>
+    <section class="utility-card shortwave-tuner">
+      <header class="utility-card__header">
+        <span>/dev/radio0</span>
+        <strong>RX-SHORTWAVE</strong>
+      </header>
+      <div class="frequency-readout">
+        <span>FREQ</span>
+        <strong>6.107 MHz</strong>
+        <em>AM / NARROW</em>
+      </div>
+      <div class="signal-meter" aria-label="信号强度">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="frequency-list">
+        <button type="button" class="is-active">6.107 MHz</button>
+        <button type="button">7.190 MHz</button>
+        <button type="button">9.421 MHz</button>
+        <button type="button">11.719 MHz</button>
+      </div>
+    </section>
 
-      <section class="utility-card shortwave-log">
-        <header class="utility-card__header">
-          <span>rx-buffer</span>
-          <strong>DECODE</strong>
-        </header>
-        <pre class="utility-pre">00:16:02 carrier lock
+    <section class="utility-card shortwave-log">
+      <header class="utility-card__header">
+        <span>rx-buffer</span>
+        <strong>DECODE</strong>
+      </header>
+      <pre class="utility-pre">00:16:02 carrier lock
 00:16:08 ... --- ... / NOT DISTRESS
 00:16:19 voice fragment: 灯塔 / 二级透镜 / 061
 00:16:31 burst: 07 19 07 19
 00:16:44 noise floor rising
 00:17:00 carrier lost</pre>
-      </section>
+    </section>
 
-      <section class="utility-card shortwave-spectrum">
-        <header class="utility-card__header">
-          <span>waterfall</span>
-          <strong>SPECTRUM</strong>
-        </header>
-        <div class="waterfall" aria-hidden="true">
-          <span style="--level: 18%"></span>
-          <span style="--level: 42%"></span>
-          <span style="--level: 31%"></span>
-          <span style="--level: 76%"></span>
-          <span style="--level: 48%"></span>
-          <span style="--level: 63%"></span>
-          <span style="--level: 24%"></span>
-          <span style="--level: 54%"></span>
-        </div>
-      </section>
-    </div>
+    <section class="utility-card shortwave-spectrum">
+      <header class="utility-card__header">
+        <span>waterfall</span>
+        <strong>SPECTRUM</strong>
+      </header>
+      <div class="waterfall" aria-hidden="true">
+        <span style="--level: 18%"></span>
+        <span style="--level: 42%"></span>
+        <span style="--level: 31%"></span>
+        <span style="--level: 76%"></span>
+        <span style="--level: 48%"></span>
+        <span style="--level: 63%"></span>
+        <span style="--level: 24%"></span>
+        <span style="--level: 54%"></span>
+      </div>
+    </section>
   `;
 }
 
@@ -940,69 +938,57 @@ function renderCommunicationsTool(): string {
     .join('');
 
   if (communicationsView === 'conversation') {
-    return `
-      <div class="comm-tool comm-tool--conversation">
-        <section class="comm-window" aria-label="通信会话">
-          ${renderChat()}
-        </section>
-      </div>
-    `;
+    return renderChat();
   }
 
   return `
-    <div class="comm-tool comm-tool--contacts">
-      <section class="comm-window comm-window--contacts" aria-label="通信信道">
-        <header class="utility-pane-title">
-          <span>/var/spool/comm</span>
-          <strong>通信列表</strong>
-        </header>
-        <div class="thread-list">
-          ${threadRows}
-        </div>
-      </section>
+    <header class="utility-pane-title">
+      <span>/var/spool/comm</span>
+      <strong>通信列表</strong>
+    </header>
+    <div class="thread-list">
+      ${threadRows}
     </div>
   `;
 }
 
 function renderClockTool(): string {
   return `
-    <div class="clock-app">
-      <section class="utility-card clock-face">
-        <header class="utility-card__header">
-          <span>clockctl status</span>
-          <strong>LOCAL CLOCK</strong>
-        </header>
-        <div class="clock-readout">
-          <span>-1162-00-00</span>
-          <strong>00:14:27</strong>
-          <em>UNVERIFIED</em>
-        </div>
-      </section>
+    <section class="utility-card clock-face">
+      <header class="utility-card__header">
+        <span>clockctl status</span>
+        <strong>LOCAL CLOCK</strong>
+      </header>
+      <div class="clock-readout">
+        <span>-1162-00-00</span>
+        <strong>00:14:27</strong>
+        <em>UNVERIFIED</em>
+      </div>
+    </section>
 
-      <section class="utility-card">
-        <header class="utility-card__header">
-          <span>timedatectl</span>
-          <strong>SOURCES</strong>
-        </header>
-        <div class="clock-table">
-          <span>授时中心</span><strong>failed</strong>
-          <span>本地缓存</span><strong>active</strong>
-          <span>共和国历</span><strong>unmapped</strong>
-          <span>漂移估计</span><strong>+271 days?</strong>
-        </div>
-      </section>
+    <section class="utility-card">
+      <header class="utility-card__header">
+        <span>timedatectl</span>
+        <strong>SOURCES</strong>
+      </header>
+      <div class="clock-table">
+        <span>授时中心</span><strong>failed</strong>
+        <span>本地缓存</span><strong>active</strong>
+        <span>共和国历</span><strong>unmapped</strong>
+        <span>漂移估计</span><strong>+271 days?</strong>
+      </div>
+    </section>
 
-      <section class="utility-card">
-        <header class="utility-card__header">
-          <span>/var/log/time</span>
-          <strong>LAST EVENTS</strong>
-        </header>
-        <pre class="utility-pre">00:00:02 sync source unreachable
+    <section class="utility-card">
+      <header class="utility-card__header">
+        <span>/var/log/time</span>
+        <strong>LAST EVENTS</strong>
+      </header>
+      <pre class="utility-pre">00:00:02 sync source unreachable
 00:00:03 cache year accepted: -1162
 00:00:07 login timestamp marked unsafe
 00:13:44 external media date: 1907-07-19</pre>
-      </section>
-    </div>
+    </section>
   `;
 }
 
@@ -1014,6 +1000,10 @@ function renderUtilityContent(): string {
 
 function getUtilityTitle(): string {
   return utilityApps.find((utilityApp) => utilityApp.id === activeUtilityAppId)?.label ?? activeUtilityAppId;
+}
+
+function getUtilityCommand(): string {
+  return utilityApps.find((utilityApp) => utilityApp.id === activeUtilityAppId)?.command ?? activeUtilityAppId;
 }
 
 function renderRecordsWorkspace(activeFile: CaseFile): string {
@@ -1042,9 +1032,9 @@ function renderRecordsWorkspace(activeFile: CaseFile): string {
         <header class="utility-tabs" aria-label="软件标签页">
           ${renderUtilityTabs()}
         </header>
-        <section class="utility-window" aria-label="${getUtilityTitle()}">
+        <section class="utility-window utility-window--${activeUtilityAppId}" aria-label="${getUtilityTitle()}">
           <div class="utility-window__title">
-            <span>${utilityApps.find((utilityApp) => utilityApp.id === activeUtilityAppId)?.command}</span>
+            <span>${getUtilityCommand()}</span>
             <strong>${getUtilityTitle()}</strong>
           </div>
           ${renderUtilityContent()}

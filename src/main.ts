@@ -78,12 +78,19 @@ let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = '';
 let shortwaveFrequencyMhz = 6.107;
+let shortwaveOffsetKhz = 0;
+let fileSearchQuery = '';
 let showUsbNotice = false;
 let mountSequenceScheduled = false;
 let loginError = '';
 
 const shortwaveMinMhz = 3;
 const shortwaveMaxMhz = 12;
+const shortwaveOffsetMinKhz = -80;
+const shortwaveOffsetMaxKhz = 80;
+const shortwaveDragSensitivityMhz = 0.018;
+const shortwaveTargetCenterMhz = 6.107;
+const shortwaveTargetOffsetKhz = 42;
 
 function startBootSequence(): void {
   render();
@@ -104,6 +111,7 @@ function enterArchiveShell(): void {
   mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
   selectedDocumentId = '';
+  fileSearchQuery = '';
   showUsbNotice = false;
   render();
   scheduleMountSequence();
@@ -318,6 +326,15 @@ function getPermissionLabel(permission: Permission): string {
   return labels[permission];
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function getVisibleVolumes(): VirtualVolume[] {
   if (mountStage === 'scanning') return [];
 
@@ -364,6 +381,59 @@ function getDirectoryDocuments(directory: VirtualDirectory): VirtualDocument[] {
   return directory.fileIds
     .map((fileId) => virtualDocuments.find((document) => document.id === fileId))
     .filter((document): document is VirtualDocument => Boolean(document));
+}
+
+function getDocumentDirectory(document: VirtualDocument): VirtualDirectory | undefined {
+  return getDirectory(document.directoryId);
+}
+
+function getDocumentPath(document: VirtualDocument): string {
+  const directory = getDocumentDirectory(document);
+  return `${directory?.path ?? ''}${document.name}.${document.extension}`;
+}
+
+function getVisibleDocuments(): VirtualDocument[] {
+  return virtualDocuments.filter((document) => {
+    const directory = getDocumentDirectory(document);
+    return Boolean(directory && isVolumeVisible(directory.volumeId));
+  });
+}
+
+function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): boolean {
+  const haystack = [
+    document.name,
+    document.extension,
+    document.classification,
+    getDocumentPath(document),
+    ...document.tags,
+    ...document.body,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(normalizedQuery);
+}
+
+function getFileSearchRank(document: VirtualDocument, normalizedQuery: string): number {
+  const fileName = `${document.name}.${document.extension}`.toLowerCase();
+  if (fileName.includes(normalizedQuery)) return 0;
+  if (getDocumentPath(document).toLowerCase().includes(normalizedQuery)) return 1;
+  if (document.tags.join(' ').toLowerCase().includes(normalizedQuery)) return 2;
+  if (document.classification.toLowerCase().includes(normalizedQuery)) return 3;
+  return 4;
+}
+
+function getFileSearchResults(): VirtualDocument[] {
+  const normalizedQuery = fileSearchQuery.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+
+  return getVisibleDocuments()
+    .filter((document) => matchesFileSearch(document, normalizedQuery))
+    .sort(
+      (a, b) =>
+        getFileSearchRank(a, normalizedQuery) - getFileSearchRank(b, normalizedQuery) ||
+        getDocumentPath(a).localeCompare(getDocumentPath(b)),
+    );
 }
 
 function getVolume(volumeId: string): VirtualVolume {
@@ -461,28 +531,49 @@ function renderParentDirectoryRow(directory: VirtualDirectory): string {
   `;
 }
 
+function renderDocumentRow(document: VirtualDocument, withPath = false): string {
+  const selected = document.id === selectedDocumentId ? 'is-selected' : '';
+  const pathMarkup = withPath ? `<span class="document-row__path">${getDocumentPath(document)}</span>` : '';
+
+  return `
+    <button class="document-row ${selected}" type="button" data-document-id="${document.id}" data-document-directory-id="${document.directoryId}">
+      <span class="document-row__icon">${document.extension}</span>
+      <span class="document-row__main">
+        <span class="document-row__name">${document.name}.${document.extension}</span>
+        ${pathMarkup}
+      </span>
+      <span class="document-row__meta">${document.sizeLabel}</span>
+    </button>
+  `;
+}
+
 function renderDirectoryList(directory: VirtualDirectory): string {
   const directoryRows = getChildDirectories(directory).map((childDirectory) => renderDirectoryRow(childDirectory)).join('');
-  const documentRows = getDirectoryDocuments(directory)
-    .map((document) => {
-      const selected = document.id === selectedDocumentId ? 'is-selected' : '';
-
-      return `
-        <button class="document-row ${selected}" type="button" data-document-id="${document.id}">
-          <span class="document-row__icon">${document.extension}</span>
-          <span class="document-row__main">
-            <span class="document-row__name">${document.name}.${document.extension}</span>
-          </span>
-          <span class="document-row__meta">${document.sizeLabel}</span>
-        </button>
-      `;
-    })
-    .join('');
+  const documentRows = getDirectoryDocuments(directory).map((document) => renderDocumentRow(document)).join('');
   const rows = renderParentDirectoryRow(directory) + directoryRows + documentRows;
 
   if (rows) return rows;
 
   return renderMountStatus('EMPTY DIRECTORY', '没有可见项目', '该目录当前没有可读文件或下级目录。');
+}
+
+function renderFileSearchForm(): string {
+  return `
+    <form class="file-search" id="fileSearchForm">
+      <span>SEARCH</span>
+      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" placeholder="offset / signal / report" aria-label="搜索文件" />
+      <button type="submit">搜索</button>
+      ${fileSearchQuery ? '<button type="button" data-file-search-clear>清除</button>' : ''}
+    </form>
+  `;
+}
+
+function renderFileSearchResults(results: VirtualDocument[]): string {
+  if (!results.length) {
+    return renderMountStatus('NO MATCH', '没有匹配文件', `未在已挂载介质中找到 “${escapeHtml(fileSearchQuery)}”。`);
+  }
+
+  return results.map((document) => renderDocumentRow(document, true)).join('');
 }
 
 function renderDocumentPreview(document: VirtualDocument | undefined): string {
@@ -534,6 +625,7 @@ function renderFileManagerWorkspace(): string {
   const directory = getSelectedDirectory();
   const selectedDocument = directory ? getSelectedDocument(directory) : undefined;
   const volume = directory ? getVolume(directory.volumeId) : undefined;
+  const searchResults = fileSearchQuery ? getFileSearchResults() : [];
 
   if (!directory || !volume) {
     return `
@@ -593,11 +685,12 @@ function renderFileManagerWorkspace(): string {
           </div>
         </header>
         <div class="directory-meta">
-          <span>${volume.description}</span>
-          <span>${directory.directoryIds.length} DIRS / ${directory.fileIds.length} FILES</span>
+          <span>${fileSearchQuery ? `搜索已挂载介质：${escapeHtml(fileSearchQuery)}` : volume.description}</span>
+          <span>${fileSearchQuery ? `${searchResults.length} RESULTS` : `${directory.directoryIds.length} DIRS / ${directory.fileIds.length} FILES`}</span>
         </div>
+        ${renderFileSearchForm()}
         <div class="document-list">
-          ${renderDirectoryList(directory)}
+          ${fileSearchQuery ? renderFileSearchResults(searchResults) : renderDirectoryList(directory)}
         </div>
       </section>
 
@@ -979,6 +1072,31 @@ function tuneShortwaveFrequency(value: number): void {
   shortwaveFrequencyMhz = Number(formatShortwaveFrequency(value));
 }
 
+function clampShortwaveOffset(value: number): number {
+  return Math.min(shortwaveOffsetMaxKhz, Math.max(shortwaveOffsetMinKhz, Math.round(value)));
+}
+
+function formatShortwaveOffset(value: number): string {
+  const offset = clampShortwaveOffset(value);
+  return `${offset >= 0 ? '+' : '-'}${String(Math.abs(offset)).padStart(3, '0')}`;
+}
+
+function tuneShortwaveOffset(value: number): void {
+  shortwaveOffsetKhz = clampShortwaveOffset(value);
+}
+
+function getShortwaveEffectiveFrequencyMhz(): number {
+  return shortwaveFrequencyMhz + shortwaveOffsetKhz / 1000;
+}
+
+function getShortwaveTargetFrequencyMhz(): number {
+  return shortwaveTargetCenterMhz + shortwaveTargetOffsetKhz / 1000;
+}
+
+function hasShortwaveReportLock(): boolean {
+  return Math.abs(getShortwaveEffectiveFrequencyMhz() - getShortwaveTargetFrequencyMhz()) <= 0.002;
+}
+
 function getShortwaveKnobAngle(): number {
   const range = shortwaveMaxMhz - shortwaveMinMhz;
   const ratio = (shortwaveFrequencyMhz - shortwaveMinMhz) / range;
@@ -986,8 +1104,8 @@ function getShortwaveKnobAngle(): number {
 }
 
 function getShortwaveSignalBars(): string {
-  const distanceFromKnownCarrier = Math.abs(shortwaveFrequencyMhz - 6.107);
-  const litBars = Math.max(1, 6 - Math.floor(distanceFromKnownCarrier * 8));
+  const distanceKhz = Math.abs(getShortwaveEffectiveFrequencyMhz() - getShortwaveTargetFrequencyMhz()) * 1000;
+  const litBars = Math.max(1, 6 - Math.floor(distanceKhz / 8));
 
   return Array.from({ length: 6 }, (_, index) => `<span class="${index < litBars ? 'is-lit' : ''}"></span>`).join('');
 }
@@ -995,6 +1113,21 @@ function getShortwaveSignalBars(): string {
 function renderShortwaveTool(): string {
   const frequency = formatShortwaveFrequency(shortwaveFrequencyMhz);
   const knobAngle = getShortwaveKnobAngle();
+  const offset = formatShortwaveOffset(shortwaveOffsetKhz);
+  const effectiveFrequency = formatShortwaveFrequency(getShortwaveEffectiveFrequencyMhz());
+  const reportLocked = hasShortwaveReportLock();
+  const decodeBuffer = reportLocked
+    ? `00:16:02 carrier lock
+00:16:08 center ${frequency} MHz / offset ${offset} kHz
+00:16:19 REPORT_NAME: REPORT_NORTHLINE_061.enc
+00:16:31 KEY_FORMAT: JANUS-0719-{four-digit-checksum}
+00:16:44 unlock stage disabled in this recovery build`
+    : `00:16:02 scanning carrier
+00:16:08 apply project offset before decode
+00:16:19 voice fragment: 灯塔 / 二级透镜 / 061
+00:16:31 burst: 07 19 07 19
+00:16:44 noise floor rising
+00:17:00 no stable report header`;
 
   return `
     <div class="shortwave-tuner">
@@ -1002,17 +1135,30 @@ function renderShortwaveTool(): string {
         <span></span>
       </button>
       <label class="frequency-input">
-        <span>FREQ / MHz</span>
+        <span>CENTER / MHz</span>
         <input type="text" inputmode="decimal" value="${frequency}" data-shortwave-frequency aria-label="短波频率" />
       </label>
       <div class="tuning-steps" aria-label="频率微调">
         <button type="button" data-tune-step="-0.010">-10 kHz</button>
         <button type="button" data-tune-step="0.010">+10 kHz</button>
       </div>
+      <label class="offset-control">
+        <span>OFFSET / kHz</span>
+        <input type="range" min="${shortwaveOffsetMinKhz}" max="${shortwaveOffsetMaxKhz}" step="1" value="${shortwaveOffsetKhz}" data-shortwave-offset aria-label="频率偏移" />
+      </label>
+      <div class="offset-readout">
+        <span>effective</span>
+        <strong>${effectiveFrequency} MHz</strong>
+        <em>${offset} kHz</em>
+      </div>
+      <div class="offset-steps" aria-label="偏移微调">
+        <button type="button" data-offset-step="-1">-1 kHz</button>
+        <button type="button" data-offset-step="1">+1 kHz</button>
+      </div>
       <div class="receiver-state">
         <span>MODE</span>
         <strong>AM / NARROW</strong>
-        <em>${Math.abs(shortwaveFrequencyMhz - 6.107) < 0.018 ? 'LOCK' : 'SCAN'}</em>
+        <em>${reportLocked ? 'LOCK' : 'SCAN'}</em>
       </div>
     </div>
 
@@ -1028,12 +1174,7 @@ function renderShortwaveTool(): string {
       </div>
     </div>
 
-    <pre class="utility-pre shortwave-buffer">00:16:02 carrier lock
-00:16:08 ... --- ... / NOT DISTRESS
-00:16:19 voice fragment: 灯塔 / 二级透镜 / 061
-00:16:31 burst: 07 19 07 19
-00:16:44 noise floor rising
-00:17:00 carrier lost</pre>
+    <pre class="utility-pre shortwave-buffer">${decodeBuffer}</pre>
 
     <div class="waterfall" aria-hidden="true">
       <span style="--level: 18%"></span>
@@ -1088,20 +1229,19 @@ function renderCommunicationsTool(): string {
 
 function renderClockTool(): string {
   return `
-    <section class="utility-card clock-face">
-      <header class="utility-card__header">
-        <span>clockctl status</span>
-        <strong>LOCAL CLOCK</strong>
-      </header>
-      <div class="clock-readout">
-        <span>-1162-00-00</span>
-        <strong>00:14:27</strong>
-        <em>UNVERIFIED</em>
-      </div>
-    </section>
+    <header class="utility-pane-title">
+      <span>clockctl status</span>
+      <strong>LOCAL CLOCK</strong>
+    </header>
 
-    <section class="utility-card">
-      <header class="utility-card__header">
+    <div class="clock-readout">
+      <span>-1162-00-00</span>
+      <strong>00:14:27</strong>
+      <em>UNVERIFIED</em>
+    </div>
+
+    <div class="clock-section">
+      <header class="clock-section__header">
         <span>timedatectl</span>
         <strong>SOURCES</strong>
       </header>
@@ -1111,10 +1251,10 @@ function renderClockTool(): string {
         <span>共和国历</span><strong>unmapped</strong>
         <span>漂移估计</span><strong>+271 days?</strong>
       </div>
-    </section>
+    </div>
 
-    <section class="utility-card">
-      <header class="utility-card__header">
+    <div class="clock-section clock-section--events">
+      <header class="clock-section__header">
         <span>/var/log/time</span>
         <strong>LAST EVENTS</strong>
       </header>
@@ -1122,7 +1262,7 @@ function renderClockTool(): string {
 00:00:03 cache year accepted: -1162
 00:00:07 login timestamp marked unsafe
 00:13:44 external media date: 1907-07-19</pre>
-    </section>
+    </div>
   `;
 }
 
@@ -1232,6 +1372,7 @@ function bindArchiveEvents(): void {
 
       selectedDirectoryId = directory.id;
       selectedDocumentId = '';
+      fileSearchQuery = '';
       showUsbNotice = false;
       render();
     });
@@ -1239,7 +1380,26 @@ function bindArchiveEvents(): void {
 
   document.querySelectorAll<HTMLButtonElement>('[data-document-id]').forEach((button) => {
     button.addEventListener('click', () => {
+      const directoryId = button.dataset.documentDirectoryId;
+      if (directoryId) selectedDirectoryId = directoryId;
       selectedDocumentId = button.dataset.documentId ?? selectedDocumentId;
+      fileSearchQuery = '';
+      render();
+    });
+  });
+
+  const fileSearchForm = document.querySelector<HTMLFormElement>('#fileSearchForm');
+  fileSearchForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const formData = new FormData(fileSearchForm);
+    fileSearchQuery = String(formData.get('fileSearch') ?? '').trim();
+    selectedDocumentId = '';
+    render();
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-file-search-clear]').forEach((button) => {
+    button.addEventListener('click', () => {
+      fileSearchQuery = '';
       render();
     });
   });
@@ -1299,6 +1459,21 @@ function bindArchiveEvents(): void {
     });
   });
 
+  document.querySelectorAll<HTMLButtonElement>('[data-offset-step]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const step = Number.parseFloat(button.dataset.offsetStep ?? '0');
+      tuneShortwaveOffset(shortwaveOffsetKhz + step);
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLInputElement>('[data-shortwave-offset]').forEach((input) => {
+    input.addEventListener('change', () => {
+      tuneShortwaveOffset(Number.parseFloat(input.value));
+      render();
+    });
+  });
+
   document.querySelectorAll<HTMLInputElement>('[data-shortwave-frequency]').forEach((input) => {
     const commitFrequency = () => {
       const value = Number.parseFloat(input.value);
@@ -1345,7 +1520,7 @@ function bindArchiveEvents(): void {
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startX;
         if (Math.abs(deltaX) > 3) moved = true;
-        previewFrequency(startFrequency + deltaX * 0.005);
+        previewFrequency(startFrequency + deltaX * shortwaveDragSensitivityMhz);
       };
 
       const handlePointerUp = () => {

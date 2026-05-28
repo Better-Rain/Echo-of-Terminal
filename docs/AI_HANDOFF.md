@@ -57,6 +57,9 @@ Last updated: 2026-05-28.
 - The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose. It slides in when external media is mounted.
 - During the delay between local disk mount and external media mount, the storage tree shows a short movable-media scan/progress status instead of an idle external-interface placeholder.
 - USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
+- A loose second-stage receiver puzzle scaffold now exists in the file manager: `RECORDS/readme.txt` -> `RECORDS/signal_log_061.txt` -> search `offset` -> `SYSTEM/INDEX/offset_jan.txt` -> tune `rx-shortwave`.
+- The receiver now has a center frequency control plus a kHz offset control. The current scaffold target is center `6.107 MHz` plus `+042 kHz`; lock output reveals `REPORT_NORTHLINE_061.enc` and key format `JANUS-0719-{four-digit-checksum}` only.
+- File manager search is generic and searches mounted document names, paths, classifications, tags, and body text. It currently does not implement report search/unlock logic.
 - The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
 - Current verification command: `npm run build`.
 
@@ -72,11 +75,13 @@ Last updated: 2026-05-28.
 8. Clicking the notice opens the USB root directory.
 9. USB contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission document with a European-style ministry header and sign-off; the document is not opened automatically.
 10. Local disk contains the current login log plus past damaged log windows in `DISK://LOCAL/SYSTEM/LOGS/`.
-11. Top navigation switches between `文件管理器` and `档案记录`.
-12. `档案记录` opens the archive workspace; the archive index stays visible while right-side tabs switch between communication software, shortwave receiver, and clock.
-13. The communication software first shows the communication list; clicking a thread enters the single conversation view, and `返回` returns to the list.
-14. Clicking a contact or group avatar opens its contact record page; the page can return to the previous communication view or open the conversation.
-15. The shortwave receiver frequency can be adjusted through the knob, mouse wheel, +/-10 kHz controls, or the editable MHz field.
+11. Local `RECORDS/readme.txt` points players toward `rx-shortwave`; `signal_log_061.txt` gives center frequency, project code, and `offset_jan.txt` as the offset-table hint.
+12. Searching `offset` in the file manager finds `SYSTEM/INDEX/offset_jan.txt`, which contains project-code offset rows.
+13. Top navigation switches between `文件管理器` and `档案记录`.
+14. `档案记录` opens the archive workspace; the archive index stays visible while right-side tabs switch between communication software, shortwave receiver, and clock.
+15. The communication software first shows the communication list; clicking a thread enters the single conversation view, and `返回` returns to the list.
+16. Clicking a contact or group avatar opens its contact record page; the page can return to the previous communication view or open the conversation.
+17. The shortwave receiver frequency can be adjusted through the knob, mouse wheel, +/-10 kHz controls, editable MHz field, kHz offset slider, and +/-1 kHz offset controls.
 
 ## Current Structure
 
@@ -117,7 +122,9 @@ Last updated: 2026-05-28.
 
 ## Next Likely Work
 
-- Expand the USB directory tree and add the first real second-stage puzzle.
+- Iterate the second-stage receiver puzzle text, target values, and report/key wording after playtesting.
+- Add the later report-name search and key-gated document unlock once the final unlock design is decided.
+- Expand the USB directory tree beyond the current commission document.
 - Decide which auxiliary tools are puzzle-bearing and move tool content into `src/data/*` once the first puzzle flow is defined.
 - Decide the original account owner's identity and avatar treatment.
 - Connect file-manager discoveries to access flags in `PlayerProfile`.

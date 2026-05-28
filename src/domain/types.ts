@@ -89,6 +89,7 @@ export type ChatMessage = {
   id: string;
   from: 'operator' | 'contact' | 'system';
   speaker: string;
+  avatar?: string;
   text: string;
   time: string;
   access?: AccessRule;
@@ -99,7 +100,12 @@ export type ChatThread = {
   id: string;
   title: string;
   contactName: string;
+  avatar: string;
+  kind: 'direct' | 'group';
   channel: string;
+  subtitle: string;
+  detail: string;
+  members?: string[];
   access: AccessRule;
   messages: ChatMessage[];
 };

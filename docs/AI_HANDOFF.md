@@ -50,10 +50,12 @@ Last updated: 2026-05-28.
 - File and directory rows intentionally show only names plus compact counts/sizes, without explanatory subtitle text.
 - The `档案记录` workspace is now a fixed archive workspace: the archive index stays open, the active record stays in the center, and the right side is a shared auxiliary-software area.
 - The right-side auxiliary area uses browser-like tabs and shows one tool at a time: `secure-comm`, `rx-shortwave`, or `clockctl`.
-- `secure-comm` is a narrow-app flow, not a split pane: it opens to the communication list, enters one conversation after a thread click, and has a back control to return to the list.
+- `secure-comm` is a narrow-app flow, not a split pane: it opens to a multi-contact communication list, enters one conversation after a thread click, and has a back control to return to the list.
+- `secure-comm` now has direct contacts plus a group relay, compact avatar message bubbles, right-aligned player messages, left-aligned contact messages, and a contact record page reachable from avatars.
 - Auxiliary tools render directly inside the shared `utility-window`; avoid reintroducing nested window shells such as `comm-window` inside app-specific wrappers.
-- `rx-shortwave` currently uses a simplified receiver face with a tuning knob, editable frequency field, signal meter, decode buffer, and waterfall display.
-- The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose.
+- `rx-shortwave` currently uses a simplified receiver face with a draggable/wheelable tuning knob, editable frequency field, +/-10 kHz controls, signal meter, decode buffer, and waterfall display.
+- The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose. It slides in when external media is mounted.
+- During the delay between local disk mount and external media mount, the storage tree shows a short movable-media scan/progress status instead of an idle external-interface placeholder.
 - USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
 - The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
 - Current verification command: `npm run build`.
@@ -73,6 +75,8 @@ Last updated: 2026-05-28.
 11. Top navigation switches between `文件管理器` and `档案记录`.
 12. `档案记录` opens the archive workspace; the archive index stays visible while right-side tabs switch between communication software, shortwave receiver, and clock.
 13. The communication software first shows the communication list; clicking a thread enters the single conversation view, and `返回` returns to the list.
+14. Clicking a contact or group avatar opens its contact record page; the page can return to the previous communication view or open the conversation.
+15. The shortwave receiver frequency can be adjusted through the knob, mouse wheel, +/-10 kHz controls, or the editable MHz field.
 
 ## Current Structure
 
@@ -83,7 +87,7 @@ Last updated: 2026-05-28.
 - `src/data/loginStage.ts`: first-stage login puzzle content.
 - `src/data/fileSystem.ts`: second-stage virtual volumes, directories, and documents.
 - `src/data/cases.ts`: example archive records.
-- `src/data/chats.ts`: example secure chat thread.
+- `src/data/chats.ts`: example secure chat contacts, group relay, contact metadata, avatars, and message history.
 - `src/data/player.ts`: current player profile. Default is readonly guest account `访客#0719`.
 - `src/data/access.ts`: role definitions and permissions.
 - `public/assets/bureau-seal.svg`: current local visual identity asset.

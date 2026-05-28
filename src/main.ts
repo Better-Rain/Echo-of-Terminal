@@ -11,6 +11,7 @@ import type {
   CaseFile,
   CaseFragment,
   ChatMessage,
+  ChatThread,
   FileReviewStatus,
   LoginStageConfig,
   Permission,
@@ -32,7 +33,8 @@ const root = app;
 const profile = currentProfile;
 type MountStage = 'scanning' | 'local-mounted' | 'external-mounted';
 type UtilityAppId = 'communications' | 'shortwave' | 'clock';
-type CommunicationsView = 'threads' | 'conversation';
+type CommunicationsView = 'threads' | 'conversation' | 'detail';
+type CommunicationsReturnView = 'threads' | 'conversation';
 
 type UtilityAppMeta = {
   id: UtilityAppId;
@@ -71,12 +73,17 @@ let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
 let workspaceView: 'files' | 'records' = 'files';
 let activeUtilityAppId: UtilityAppId = 'communications';
 let communicationsView: CommunicationsView = 'threads';
+let communicationsReturnView: CommunicationsReturnView = 'threads';
 let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = '';
+let shortwaveFrequencyMhz = 6.107;
 let showUsbNotice = false;
 let mountSequenceScheduled = false;
 let loginError = '';
+
+const shortwaveMinMhz = 3;
+const shortwaveMaxMhz = 12;
 
 function startBootSequence(): void {
   render();
@@ -93,6 +100,7 @@ function enterArchiveShell(): void {
   workspaceView = 'files';
   activeUtilityAppId = 'communications';
   communicationsView = 'threads';
+  communicationsReturnView = 'threads';
   mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
   selectedDocumentId = '';
@@ -381,9 +389,10 @@ function renderStorageTree(): string {
   const pendingExternalMarkup =
     mountStage === 'local-mounted'
       ? renderMountStatus(
-          'BUS WATCH',
-          '外部接口空闲',
-          '等待新接入的存储介质完成只读握手。',
+          'MOUNT SCAN',
+          '正在刷新可移动介质',
+          '总线监听中，等待外接存储完成只读握手。',
+          true,
         )
       : '';
 
@@ -411,12 +420,13 @@ function renderStorageTree(): string {
   return volumeRows + pendingExternalMarkup;
 }
 
-function renderMountStatus(label: string, title: string, message: string): string {
+function renderMountStatus(label: string, title: string, message: string, withProgress = false): string {
   return `
     <div class="mount-status">
       <p class="eyebrow">${label}</p>
       <strong>${title}</strong>
       <span>${message}</span>
+      ${withProgress ? '<i class="mount-progress" aria-hidden="true"><b></b></i>' : ''}
     </div>
   `;
 }
@@ -792,24 +802,59 @@ function renderActiveFile(file: CaseFile): string {
   `;
 }
 
-function renderChatMessage(message: ChatMessage): string {
+function getSelectedChatThread(): ChatThread {
+  return chatThreads.find((item) => item.id === selectedThreadId) ?? chatThreads[0];
+}
+
+function getThreadKindLabel(thread: ChatThread): string {
+  return thread.kind === 'group' ? 'GROUP' : 'DIRECT';
+}
+
+function renderContactAvatar(thread: ChatThread, className = ''): string {
+  return `
+    <button class="contact-avatar ${thread.kind === 'group' ? 'contact-avatar--group' : ''} ${className}" type="button" data-contact-detail="${thread.id}" aria-label="查看${thread.contactName}登记信息">
+      ${thread.avatar}
+    </button>
+  `;
+}
+
+function renderChatMessage(message: ChatMessage, thread: ChatThread): string {
   const access = evaluateAccess(profile, message.access);
   const text = access.allowed ? message.text : message.redactedText ?? '权限不足：消息被遮蔽。';
   const redactedClass = access.allowed ? '' : 'is-redacted';
 
+  if (message.from === 'system') {
+    return `
+      <article class="chat-message chat-message--system ${redactedClass}">
+        <span>${message.speaker} / ${message.time}</span>
+        <p>${text}</p>
+      </article>
+    `;
+  }
+
+  const avatar = message.avatar ?? (message.from === 'operator' ? '07' : thread.avatar);
+  const avatarMarkup =
+    message.from === 'contact'
+      ? `<button class="message-avatar" type="button" data-contact-detail="${thread.id}" aria-label="查看${thread.contactName}登记信息">${avatar}</button>`
+      : `<span class="message-avatar message-avatar--self">${avatar}</span>`;
+
   return `
     <article class="chat-message chat-message--${message.from} ${redactedClass}">
-      <div class="chat-message__meta">
-        <span>${message.speaker}</span>
-        <time>${message.time}</time>
+      ${message.from === 'contact' ? avatarMarkup : ''}
+      <div class="chat-message__bubble">
+        <div class="chat-message__meta">
+          <span>${message.speaker}</span>
+          <time>${message.time}</time>
+        </div>
+        <p>${text}</p>
       </div>
-      <p>${text}</p>
+      ${message.from === 'operator' ? avatarMarkup : ''}
     </article>
   `;
 }
 
 function renderChat(): string {
-  const thread = chatThreads.find((item) => item.id === selectedThreadId) ?? chatThreads[0];
+  const thread = getSelectedChatThread();
   const threadAccess = evaluateAccess(profile, thread.access);
   const canSendMessage = profile.permissions.includes('chat:message');
 
@@ -817,9 +862,12 @@ function renderChat(): string {
     return `
       <header class="panel-header panel-header--compact panel-header--chat">
         <button class="comm-back-button" type="button" data-comm-back aria-label="返回通信列表">返回</button>
-        <div>
-          <p class="eyebrow">SECURE CHAT</p>
-          <h2>${thread.title}</h2>
+        <div class="chat-heading">
+          ${renderContactAvatar(thread, 'chat-heading__avatar')}
+          <div>
+            <p class="eyebrow">SECURE CHAT</p>
+            <h2>${thread.title}</h2>
+          </div>
         </div>
       </header>
       <div class="access-panel access-panel--chat">
@@ -833,14 +881,17 @@ function renderChat(): string {
   return `
     <header class="panel-header panel-header--compact panel-header--chat">
       <button class="comm-back-button" type="button" data-comm-back aria-label="返回通信列表">返回</button>
-      <div>
-        <p class="eyebrow">${thread.channel}</p>
-        <h2>${thread.title}</h2>
+      <div class="chat-heading">
+        ${renderContactAvatar(thread, 'chat-heading__avatar')}
+        <div>
+          <p class="eyebrow">${thread.channel}</p>
+          <h2>${thread.title}</h2>
+        </div>
       </div>
       <span class="online-dot" title="在线"></span>
     </header>
     <div class="chat-log">
-      ${thread.messages.map(renderChatMessage).join('')}
+      ${thread.messages.map((message) => renderChatMessage(message, thread)).join('')}
     </div>
     ${
       canSendMessage
@@ -850,6 +901,56 @@ function renderChat(): string {
           </form>`
         : `<div class="chat-readonly">只读镜像：当前账号不具备写入信道权限。</div>`
     }
+  `;
+}
+
+function renderContactDetail(): string {
+  const thread = getSelectedChatThread();
+  const access = evaluateAccess(profile, thread.access);
+  const memberMarkup =
+    thread.kind === 'group' && thread.members?.length
+      ? `
+          <section class="contact-detail__section">
+            <span>成员镜像</span>
+            <ul>
+              ${thread.members.map((member) => `<li>${member}</li>`).join('')}
+            </ul>
+          </section>
+        `
+      : '';
+
+  return `
+    <header class="panel-header panel-header--compact panel-header--chat">
+      <button class="comm-back-button" type="button" data-comm-detail-back aria-label="返回上一层">返回</button>
+      <div>
+        <p class="eyebrow">CONTACT RECORD</p>
+        <h2>${thread.contactName}</h2>
+      </div>
+      <button class="comm-open-button" type="button" data-thread-id="${thread.id}">打开会话</button>
+    </header>
+    <section class="contact-detail">
+      <div class="contact-detail__identity">
+        <span class="contact-detail__avatar ${thread.kind === 'group' ? 'contact-detail__avatar--group' : ''}">${thread.avatar}</span>
+        <div>
+          <p class="eyebrow">SECURE CHAT</p>
+          <strong>${thread.title}</strong>
+          <span>${thread.subtitle}</span>
+        </div>
+      </div>
+
+      <div class="contact-detail__facts">
+        <span>类型</span><strong>${getThreadKindLabel(thread)}</strong>
+        <span>信道</span><strong>${thread.channel}</strong>
+        <span>权限</span><strong>${access.allowed ? 'READABLE' : 'LOCKED'}</strong>
+      </div>
+
+      <section class="contact-detail__section">
+        <span>登记备注</span>
+        <p>${thread.detail}</p>
+      </section>
+
+      ${memberMarkup}
+    </section>
   `;
 }
 
@@ -866,26 +967,58 @@ function renderUtilityTabs(): string {
     .join('');
 }
 
+function clampShortwaveFrequency(value: number): number {
+  return Math.min(shortwaveMaxMhz, Math.max(shortwaveMinMhz, value));
+}
+
+function formatShortwaveFrequency(value: number): string {
+  return clampShortwaveFrequency(value).toFixed(3);
+}
+
+function tuneShortwaveFrequency(value: number): void {
+  shortwaveFrequencyMhz = Number(formatShortwaveFrequency(value));
+}
+
+function getShortwaveKnobAngle(): number {
+  const range = shortwaveMaxMhz - shortwaveMinMhz;
+  const ratio = (shortwaveFrequencyMhz - shortwaveMinMhz) / range;
+  return Math.round(-135 + ratio * 270);
+}
+
+function getShortwaveSignalBars(): string {
+  const distanceFromKnownCarrier = Math.abs(shortwaveFrequencyMhz - 6.107);
+  const litBars = Math.max(1, 6 - Math.floor(distanceFromKnownCarrier * 8));
+
+  return Array.from({ length: 6 }, (_, index) => `<span class="${index < litBars ? 'is-lit' : ''}"></span>`).join('');
+}
+
 function renderShortwaveTool(): string {
+  const frequency = formatShortwaveFrequency(shortwaveFrequencyMhz);
+  const knobAngle = getShortwaveKnobAngle();
+
   return `
     <div class="shortwave-tuner">
-      <button class="tuning-knob" type="button" aria-label="调频旋钮">
+      <button class="tuning-knob" type="button" data-shortwave-knob style="--knob-angle: ${knobAngle}deg" aria-label="调频旋钮">
         <span></span>
       </button>
       <label class="frequency-input">
         <span>FREQ / MHz</span>
-        <input type="text" inputmode="decimal" value="6.107" aria-label="短波频率" />
+        <input type="text" inputmode="decimal" value="${frequency}" data-shortwave-frequency aria-label="短波频率" />
       </label>
+      <div class="tuning-steps" aria-label="频率微调">
+        <button type="button" data-tune-step="-0.010">-10 kHz</button>
+        <button type="button" data-tune-step="0.010">+10 kHz</button>
+      </div>
       <div class="receiver-state">
         <span>MODE</span>
         <strong>AM / NARROW</strong>
-        <em>LOCK</em>
+        <em>${Math.abs(shortwaveFrequencyMhz - 6.107) < 0.018 ? 'LOCK' : 'SCAN'}</em>
       </div>
     </div>
 
     <div class="shortwave-signal">
       <div class="signal-meter" aria-label="信号强度">
-        <span></span><span></span><span></span><span></span><span></span><span></span>
+        ${getShortwaveSignalBars()}
       </div>
       <div class="signal-scale">
         <span>3.0</span>
@@ -922,14 +1055,21 @@ function renderCommunicationsTool(): string {
       const access = evaluateAccess(profile, thread.access);
 
       return `
-        <button class="thread-row ${selected}" type="button" data-thread-id="${thread.id}">
-          <strong>${thread.contactName}</strong>
-          <span>${thread.channel}</span>
-          <em>${access.allowed ? 'readable' : 'locked'}</em>
-        </button>
+        <article class="thread-row ${selected}">
+          ${renderContactAvatar(thread)}
+          <button class="thread-row__open" type="button" data-thread-id="${thread.id}">
+            <strong>${thread.contactName}</strong>
+            <span>${thread.subtitle}</span>
+          </button>
+          <em>${access.allowed ? getThreadKindLabel(thread) : 'LOCKED'}</em>
+        </article>
       `;
     })
     .join('');
+
+  if (communicationsView === 'detail') {
+    return renderContactDetail();
+  }
 
   if (communicationsView === 'conversation') {
     return renderChat();
@@ -1116,6 +1256,18 @@ function bindArchiveEvents(): void {
       selectedThreadId = button.dataset.threadId ?? selectedThreadId;
       activeUtilityAppId = 'communications';
       communicationsView = 'conversation';
+      communicationsReturnView = 'threads';
+      workspaceView = 'records';
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-contact-detail]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedThreadId = button.dataset.contactDetail ?? selectedThreadId;
+      activeUtilityAppId = 'communications';
+      communicationsReturnView = communicationsView === 'conversation' ? 'conversation' : 'threads';
+      communicationsView = 'detail';
       workspaceView = 'records';
       render();
     });
@@ -1127,6 +1279,86 @@ function bindArchiveEvents(): void {
       activeUtilityAppId = 'communications';
       workspaceView = 'records';
       render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-comm-detail-back]').forEach((button) => {
+    button.addEventListener('click', () => {
+      communicationsView = communicationsReturnView;
+      activeUtilityAppId = 'communications';
+      workspaceView = 'records';
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-tune-step]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const step = Number.parseFloat(button.dataset.tuneStep ?? '0');
+      tuneShortwaveFrequency(shortwaveFrequencyMhz + step);
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLInputElement>('[data-shortwave-frequency]').forEach((input) => {
+    const commitFrequency = () => {
+      const value = Number.parseFloat(input.value);
+      if (Number.isNaN(value)) {
+        input.value = formatShortwaveFrequency(shortwaveFrequencyMhz);
+        return;
+      }
+
+      tuneShortwaveFrequency(value);
+      render();
+    };
+
+    input.addEventListener('change', commitFrequency);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      commitFrequency();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-shortwave-knob]').forEach((button) => {
+    button.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        tuneShortwaveFrequency(shortwaveFrequencyMhz + (event.deltaY > 0 ? -0.01 : 0.01));
+        render();
+      },
+      { passive: false },
+    );
+
+    button.addEventListener('pointerdown', (event) => {
+      const startX = event.clientX;
+      const startFrequency = shortwaveFrequencyMhz;
+      let moved = false;
+
+      const previewFrequency = (value: number) => {
+        tuneShortwaveFrequency(value);
+        button.style.setProperty('--knob-angle', `${getShortwaveKnobAngle()}deg`);
+        const input = document.querySelector<HTMLInputElement>('[data-shortwave-frequency]');
+        if (input) input.value = formatShortwaveFrequency(shortwaveFrequencyMhz);
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        if (Math.abs(deltaX) > 3) moved = true;
+        previewFrequency(startFrequency + deltaX * 0.005);
+      };
+
+      const handlePointerUp = () => {
+        document.removeEventListener('pointermove', handlePointerMove);
+        document.removeEventListener('pointerup', handlePointerUp);
+        if (!moved) tuneShortwaveFrequency(startFrequency + 0.01);
+        render();
+      };
+
+      event.preventDefault();
+      button.setPointerCapture?.(event.pointerId);
+      document.addEventListener('pointermove', handlePointerMove);
+      document.addEventListener('pointerup', handlePointerUp);
     });
   });
 

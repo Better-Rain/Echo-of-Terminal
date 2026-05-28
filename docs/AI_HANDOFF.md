@@ -50,6 +50,7 @@ Last updated: 2026-05-28.
 - File and directory rows intentionally show only names plus compact counts/sizes, without explanatory subtitle text.
 - The `档案记录` workspace is now a fixed archive workspace: the archive index stays open, the active record stays in the center, and the right side is a shared auxiliary-software area.
 - The right-side auxiliary area uses browser-like tabs and shows one tool at a time: `secure-comm`, `rx-shortwave`, or `clockctl`.
+- `secure-comm` is a narrow-app flow, not a split pane: it opens to the communication list, enters one conversation after a thread click, and has a back control to return to the list.
 - The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose.
 - USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
 - The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
@@ -69,6 +70,7 @@ Last updated: 2026-05-28.
 10. Local disk contains the current login log plus past damaged log windows in `DISK://LOCAL/SYSTEM/LOGS/`.
 11. Top navigation switches between `文件管理器` and `档案记录`.
 12. `档案记录` opens the archive workspace; the archive index stays visible while right-side tabs switch between communication software, shortwave receiver, and clock.
+13. The communication software first shows the communication list; clicking a thread enters the single conversation view, and `返回` returns to the list.
 
 ## Current Structure
 

@@ -32,6 +32,7 @@ const root = app;
 const profile = currentProfile;
 type MountStage = 'scanning' | 'local-mounted' | 'external-mounted';
 type UtilityAppId = 'communications' | 'shortwave' | 'clock';
+type CommunicationsView = 'threads' | 'conversation';
 
 type UtilityAppMeta = {
   id: UtilityAppId;
@@ -69,6 +70,7 @@ let selectedThreadId = chatThreads[0].id;
 let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
 let workspaceView: 'files' | 'records' = 'files';
 let activeUtilityAppId: UtilityAppId = 'communications';
+let communicationsView: CommunicationsView = 'threads';
 let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = '';
@@ -90,6 +92,7 @@ function enterArchiveShell(): void {
   appView = 'archive';
   workspaceView = 'files';
   activeUtilityAppId = 'communications';
+  communicationsView = 'threads';
   mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
   selectedDocumentId = '';
@@ -812,7 +815,8 @@ function renderChat(): string {
 
   if (!threadAccess.allowed) {
     return `
-      <header class="panel-header panel-header--compact">
+      <header class="panel-header panel-header--compact panel-header--chat">
+        <button class="comm-back-button" type="button" data-comm-back aria-label="返回通信列表">返回</button>
         <div>
           <p class="eyebrow">SECURE CHAT</p>
           <h2>${thread.title}</h2>
@@ -827,7 +831,8 @@ function renderChat(): string {
   }
 
   return `
-    <header class="panel-header panel-header--compact">
+    <header class="panel-header panel-header--compact panel-header--chat">
+      <button class="comm-back-button" type="button" data-comm-back aria-label="返回通信列表">返回</button>
       <div>
         <p class="eyebrow">${thread.channel}</p>
         <h2>${thread.title}</h2>
@@ -934,17 +939,26 @@ function renderCommunicationsTool(): string {
     })
     .join('');
 
+  if (communicationsView === 'conversation') {
+    return `
+      <div class="comm-tool comm-tool--conversation">
+        <section class="comm-window" aria-label="通信会话">
+          ${renderChat()}
+        </section>
+      </div>
+    `;
+  }
+
   return `
-    <div class="comm-tool">
-      <aside class="thread-list" aria-label="通信信道">
-        <div class="utility-pane-title">
+    <div class="comm-tool comm-tool--contacts">
+      <section class="comm-window comm-window--contacts" aria-label="通信信道">
+        <header class="utility-pane-title">
           <span>/var/spool/comm</span>
-          <strong>CHANNELS</strong>
+          <strong>通信列表</strong>
+        </header>
+        <div class="thread-list">
+          ${threadRows}
         </div>
-        ${threadRows}
-      </aside>
-      <section class="comm-window" aria-label="通信软件">
-        ${renderChat()}
       </section>
     </div>
   `;
@@ -1116,6 +1130,16 @@ function bindArchiveEvents(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-thread-id]').forEach((button) => {
     button.addEventListener('click', () => {
       selectedThreadId = button.dataset.threadId ?? selectedThreadId;
+      activeUtilityAppId = 'communications';
+      communicationsView = 'conversation';
+      workspaceView = 'records';
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-comm-back]').forEach((button) => {
+    button.addEventListener('click', () => {
+      communicationsView = 'threads';
       activeUtilityAppId = 'communications';
       workspaceView = 'records';
       render();

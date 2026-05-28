@@ -31,6 +31,46 @@ if (!app) {
 const root = app;
 const profile = currentProfile;
 type MountStage = 'scanning' | 'local-mounted' | 'external-mounted';
+type UnixAppId = 'dashboard' | 'records' | 'shortwave' | 'communications' | 'clock';
+
+type UnixAppMeta = {
+  id: Exclude<UnixAppId, 'dashboard'>;
+  label: string;
+  command: string;
+  status: string;
+  access: string;
+};
+
+const unixApps: UnixAppMeta[] = [
+  {
+    id: 'records',
+    label: '档案索引',
+    command: 'case-index',
+    status: 'READ ONLY',
+    access: '/var/archive/case',
+  },
+  {
+    id: 'shortwave',
+    label: '短波接收器',
+    command: 'rx-shortwave',
+    status: 'MONITOR',
+    access: '/dev/radio0',
+  },
+  {
+    id: 'communications',
+    label: '通信软件',
+    command: 'secure-comm',
+    status: 'MIRROR',
+    access: '/var/spool/comm',
+  },
+  {
+    id: 'clock',
+    label: '时钟',
+    command: 'clockctl',
+    status: 'DRIFT',
+    access: '/etc/localtime',
+  },
+];
 
 const localMountDelayMs = 900;
 const externalMountDelayMs = 2400;
@@ -39,6 +79,7 @@ let selectedFileId = caseFiles[0].id;
 let selectedThreadId = chatThreads[0].id;
 let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
 let workspaceView: 'files' | 'records' = 'files';
+let activeUnixAppId: UnixAppId = 'dashboard';
 let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = '';
@@ -59,6 +100,7 @@ function startBootSequence(): void {
 function enterArchiveShell(): void {
   appView = 'archive';
   workspaceView = 'files';
+  activeUnixAppId = 'dashboard';
   mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
   selectedDocumentId = '';
@@ -817,19 +859,94 @@ function renderChat(): string {
   `;
 }
 
-function renderRecordsWorkspace(activeFile: CaseFile): string {
+function renderUnixDock(): string {
+  const appButtons = unixApps
+    .map(
+      (unixApp) => `
+        <button class="unix-dock__item ${activeUnixAppId === unixApp.id ? 'is-active' : ''}" type="button" data-unix-app="${unixApp.id}">
+          <span>${unixApp.command}</span>
+          <strong>${unixApp.label}</strong>
+        </button>
+      `,
+    )
+    .join('');
+
   return `
-    <section class="workspace">
-      <aside class="sidebar" aria-label="档案列表">
-        <div class="panel-header panel-header--compact">
-          <div>
-            <p class="eyebrow">CASE INDEX</p>
-            <h2>档案索引</h2>
-          </div>
+    <aside class="unix-dock" aria-label="应用列表">
+      <button class="unix-dock__item ${activeUnixAppId === 'dashboard' ? 'is-active' : ''}" type="button" data-unix-app="dashboard">
+        <span>desk</span>
+        <strong>应用看板</strong>
+      </button>
+      ${appButtons}
+    </aside>
+  `;
+}
+
+function renderUnixDashboard(): string {
+  const appCards = unixApps
+    .map(
+      (unixApp) => `
+        <button class="unix-app-card" type="button" data-unix-app="${unixApp.id}">
+          <span class="unix-app-card__cmd">${unixApp.command}</span>
+          <strong>${unixApp.label}</strong>
+          <span>${unixApp.access}</span>
+          <em>${unixApp.status}</em>
+        </button>
+      `,
+    )
+    .join('');
+
+  return `
+    <div class="unix-dashboard">
+      <section class="unix-panel unix-panel--apps">
+        <header class="unix-panel__header">
+          <span>/usr/local/bin</span>
+          <strong>APPLICATIONS</strong>
+        </header>
+        <div class="unix-app-grid">
+          ${appCards}
+        </div>
+      </section>
+
+      <section class="unix-panel">
+        <header class="unix-panel__header">
+          <span>ps -a</span>
+          <strong>PROCESS</strong>
+        </header>
+        <div class="unix-process-list">
+          <span>0719</span><strong>case-index</strong><em>idle</em>
+          <span>0720</span><strong>secure-comm</strong><em>mirror</em>
+          <span>0721</span><strong>rx-shortwave</strong><em>standby</em>
+          <span>0722</span><strong>clockctl</strong><em>drift</em>
+        </div>
+      </section>
+
+      <section class="unix-panel">
+        <header class="unix-panel__header">
+          <span>motd</span>
+          <strong>SESSION</strong>
+        </header>
+        <pre class="unix-pre">login: 访客#0719
+host: blackbox-archive
+tty: pts/0
+perm: read-only
+clock: untrusted</pre>
+      </section>
+    </div>
+  `;
+}
+
+function renderRecordsApp(activeFile: CaseFile): string {
+  return `
+    <div class="unix-record-app">
+      <aside class="unix-record-index" aria-label="档案列表">
+        <div class="unix-pane-title">
+          <span>/var/archive/case</span>
+          <strong>CASE INDEX</strong>
         </div>
         ${renderRoleSummary()}
         <div class="search-strip">
-          <span>QUERY</span>
+          <span>grep</span>
           <input type="text" value="北线 灯塔 匿名信 权限" aria-label="档案搜索" />
         </div>
         <nav class="file-list">
@@ -837,11 +954,188 @@ function renderRecordsWorkspace(activeFile: CaseFile): string {
         </nav>
       </aside>
 
-      ${renderActiveFile(activeFile)}
+      <div class="unix-record-reader">
+        ${renderActiveFile(activeFile)}
+      </div>
+    </div>
+  `;
+}
 
-      <aside class="chat-panel" aria-label="通信镜像">
-        ${renderChat()}
+function renderShortwaveApp(): string {
+  return `
+    <div class="shortwave-app">
+      <section class="unix-panel shortwave-tuner">
+        <header class="unix-panel__header">
+          <span>/dev/radio0</span>
+          <strong>RX-SHORTWAVE</strong>
+        </header>
+        <div class="frequency-readout">
+          <span>FREQ</span>
+          <strong>6.107 MHz</strong>
+          <em>AM / NARROW</em>
+        </div>
+        <div class="signal-meter" aria-label="信号强度">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="frequency-list">
+          <button type="button" class="is-active">6.107 MHz</button>
+          <button type="button">7.190 MHz</button>
+          <button type="button">9.421 MHz</button>
+          <button type="button">11.719 MHz</button>
+        </div>
+      </section>
+
+      <section class="unix-panel shortwave-log">
+        <header class="unix-panel__header">
+          <span>rx-buffer</span>
+          <strong>DECODE</strong>
+        </header>
+        <pre class="unix-pre">00:16:02 carrier lock
+00:16:08 ... --- ... / NOT DISTRESS
+00:16:19 voice fragment: 灯塔 / 二级透镜 / 061
+00:16:31 burst: 07 19 07 19
+00:16:44 noise floor rising
+00:17:00 carrier lost</pre>
+      </section>
+
+      <section class="unix-panel shortwave-spectrum">
+        <header class="unix-panel__header">
+          <span>waterfall</span>
+          <strong>SPECTRUM</strong>
+        </header>
+        <div class="waterfall" aria-hidden="true">
+          <span style="--level: 18%"></span>
+          <span style="--level: 42%"></span>
+          <span style="--level: 31%"></span>
+          <span style="--level: 76%"></span>
+          <span style="--level: 48%"></span>
+          <span style="--level: 63%"></span>
+          <span style="--level: 24%"></span>
+          <span style="--level: 54%"></span>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderCommunicationsApp(): string {
+  const threadRows = chatThreads
+    .map((thread) => {
+      const selected = thread.id === selectedThreadId ? 'is-active' : '';
+      const access = evaluateAccess(profile, thread.access);
+
+      return `
+        <button class="thread-row ${selected}" type="button" data-thread-id="${thread.id}">
+          <strong>${thread.contactName}</strong>
+          <span>${thread.channel}</span>
+          <em>${access.allowed ? 'readable' : 'locked'}</em>
+        </button>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="unix-comm-app">
+      <aside class="unix-thread-list" aria-label="通信信道">
+        <div class="unix-pane-title">
+          <span>/var/spool/comm</span>
+          <strong>CHANNELS</strong>
+        </div>
+        ${threadRows}
       </aside>
+      <section class="unix-chat-window" aria-label="通信软件">
+        ${renderChat()}
+      </section>
+    </div>
+  `;
+}
+
+function renderClockApp(): string {
+  return `
+    <div class="clock-app">
+      <section class="unix-panel clock-face">
+        <header class="unix-panel__header">
+          <span>clockctl status</span>
+          <strong>LOCAL CLOCK</strong>
+        </header>
+        <div class="clock-readout">
+          <span>-1162-00-00</span>
+          <strong>00:14:27</strong>
+          <em>UNVERIFIED</em>
+        </div>
+      </section>
+
+      <section class="unix-panel">
+        <header class="unix-panel__header">
+          <span>timedatectl</span>
+          <strong>SOURCES</strong>
+        </header>
+        <div class="clock-table">
+          <span>授时中心</span><strong>failed</strong>
+          <span>本地缓存</span><strong>active</strong>
+          <span>共和国历</span><strong>unmapped</strong>
+          <span>漂移估计</span><strong>+271 days?</strong>
+        </div>
+      </section>
+
+      <section class="unix-panel">
+        <header class="unix-panel__header">
+          <span>/var/log/time</span>
+          <strong>LAST EVENTS</strong>
+        </header>
+        <pre class="unix-pre">00:00:02 sync source unreachable
+00:00:03 cache year accepted: -1162
+00:00:07 login timestamp marked unsafe
+00:13:44 external media date: 1907-07-19</pre>
+      </section>
+    </div>
+  `;
+}
+
+function renderUnixAppContent(activeFile: CaseFile): string {
+  if (activeUnixAppId === 'records') return renderRecordsApp(activeFile);
+  if (activeUnixAppId === 'shortwave') return renderShortwaveApp();
+  if (activeUnixAppId === 'communications') return renderCommunicationsApp();
+  if (activeUnixAppId === 'clock') return renderClockApp();
+  return renderUnixDashboard();
+}
+
+function getUnixWindowTitle(): string {
+  if (activeUnixAppId === 'dashboard') return '应用看板';
+  return unixApps.find((unixApp) => unixApp.id === activeUnixAppId)?.label ?? activeUnixAppId;
+}
+
+function renderRecordsWorkspace(activeFile: CaseFile): string {
+  return `
+    <section class="workspace workspace--unix">
+      <header class="unix-menubar">
+        <div>
+          <p class="eyebrow">UNIX RECOVERY SHELL</p>
+          <h2>blackbox-archive:/home/guest0719</h2>
+        </div>
+        <div class="unix-command-line">
+          <span>$</span>
+          <strong>${activeUnixAppId === 'dashboard' ? 'ls /usr/local/bin' : unixApps.find((unixApp) => unixApp.id === activeUnixAppId)?.command}</strong>
+        </div>
+      </header>
+
+      <div class="unix-workbench">
+        ${renderUnixDock()}
+        <section class="unix-window" aria-label="${getUnixWindowTitle()}">
+          <header class="unix-window__bar">
+            <div>
+              <span class="unix-window__dot"></span>
+              <span class="unix-window__dot"></span>
+              <span class="unix-window__dot"></span>
+            </div>
+            <strong>${getUnixWindowTitle()}</strong>
+            <button type="button" data-unix-app="dashboard">desk</button>
+          </header>
+          <div class="unix-window__body">
+            ${renderUnixAppContent(activeFile)}
+          </div>
+        </section>
+      </div>
     </section>
   `;
 }
@@ -867,7 +1161,7 @@ function renderUsbNotice(): string {
 function renderTerminalLine(): string {
   const readableCount = caseFiles.filter((file) => evaluateAccess(profile, file.access).allowed).length;
   const solvedCount = caseFiles.filter((file) => file.reviewStatus === 'solved').length;
-  const workspaceLabel = workspaceView === 'files' ? 'FILE MANAGER' : 'RECORD INDEX';
+  const workspaceLabel = workspaceView === 'files' ? 'FILE MANAGER' : `UNIX ${activeUnixAppId.toUpperCase()}`;
   return `SYS: ${caseFiles.length} RECORDS / ${readableCount} READABLE / ${solvedCount} VERIFIED / ${workspaceLabel} / ROLE ${profile.activeRole.toUpperCase()}`;
 }
 
@@ -877,6 +1171,25 @@ function bindArchiveEvents(): void {
       const view = button.dataset.workspaceView;
       if (view !== 'files' && view !== 'records') return;
       workspaceView = view;
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-unix-app]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const appId = button.dataset.unixApp;
+      if (
+        appId !== 'dashboard' &&
+        appId !== 'records' &&
+        appId !== 'shortwave' &&
+        appId !== 'communications' &&
+        appId !== 'clock'
+      ) {
+        return;
+      }
+
+      activeUnixAppId = appId;
+      workspaceView = 'records';
       render();
     });
   });
@@ -904,6 +1217,15 @@ function bindArchiveEvents(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-file-id]').forEach((button) => {
     button.addEventListener('click', () => {
       selectedFileId = button.dataset.fileId ?? selectedFileId;
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-thread-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      selectedThreadId = button.dataset.threadId ?? selectedThreadId;
+      activeUnixAppId = 'communications';
+      workspaceView = 'records';
       render();
     });
   });

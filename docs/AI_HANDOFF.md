@@ -48,8 +48,8 @@ Last updated: 2026-05-28.
 - Switching a volume or directory only changes the directory view; documents open only after the player clicks a file row.
 - Local disk is now a small directory tree (`SYSTEM`, `COMMUNICATIONS`, `RECORDS`, `USERS`, `TEMP`) with one current-session log and several past time-window damaged logs under `SYSTEM/LOGS/`.
 - File and directory rows intentionally show only names plus compact counts/sizes, without explanatory subtitle text.
-- The `档案记录` workspace is now a Unix-style app workbench. It defaults to an app dashboard and can open `case-index`, `rx-shortwave`, `secure-comm`, and `clockctl`.
-- Existing archive records remain in the `case-index` app; existing chat content is now the standalone `secure-comm` app.
+- The `档案记录` workspace is now a fixed archive workspace: the archive index stays open, the active record stays in the center, and the right side is a shared auxiliary-software area.
+- The right-side auxiliary area uses browser-like tabs and shows one tool at a time: `secure-comm`, `rx-shortwave`, or `clockctl`.
 - The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose.
 - USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
 - The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
@@ -68,12 +68,12 @@ Last updated: 2026-05-28.
 9. USB contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission document with a European-style ministry header and sign-off; the document is not opened automatically.
 10. Local disk contains the current login log plus past damaged log windows in `DISK://LOCAL/SYSTEM/LOGS/`.
 11. Top navigation switches between `文件管理器` and `档案记录`.
-12. `档案记录` opens the Unix-style app workbench; app buttons switch between archive index, shortwave receiver, communication software, and clock.
+12. `档案记录` opens the archive workspace; the archive index stays visible while right-side tabs switch between communication software, shortwave receiver, and clock.
 
 ## Current Structure
 
-- `src/main.ts`: state machine and UI rendering. Current stages are `boot`, `login`, `authenticating`, and `archive`; `activeUnixAppId` controls the Unix app workbench under `档案记录`.
-- `src/styles.css`: all current visual styling, including terminal layout, scrollbars, file manager, Unix app workbench, record panels, login screens, and USB notice.
+- `src/main.ts`: state machine and UI rendering. Current stages are `boot`, `login`, `authenticating`, and `archive`; `activeUtilityAppId` controls the right-side auxiliary software tab under `档案记录`.
+- `src/styles.css`: all current visual styling, including terminal layout, scrollbars, file manager, archive workspace, auxiliary software tabs, record panels, login screens, and USB notice.
 - `src/domain/types.ts`: shared data types for access rules, cases, chat, login, and virtual filesystem. `VirtualDirectory` supports child directories via `directoryIds`.
 - `src/domain/access.ts`: access-rule evaluator, independent from UI.
 - `src/data/loginStage.ts`: first-stage login puzzle content.
@@ -110,7 +110,7 @@ Last updated: 2026-05-28.
 ## Next Likely Work
 
 - Expand the USB directory tree and add the first real second-stage puzzle.
-- Decide which Unix apps are puzzle-bearing and move app content into `src/data/*` once the first puzzle flow is defined.
+- Decide which auxiliary tools are puzzle-bearing and move tool content into `src/data/*` once the first puzzle flow is defined.
 - Decide the original account owner's identity and avatar treatment.
 - Connect file-manager discoveries to access flags in `PlayerProfile`.
 - Add lightweight persistence for discovered files and unlocked records.

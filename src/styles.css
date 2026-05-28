@@ -434,7 +434,8 @@ button {
 .chat-panel,
 .storage-panel,
 .directory-panel,
-.document-panel {
+.document-panel,
+.utility-panel {
   border: 1px solid var(--line);
   background:
     linear-gradient(180deg, rgba(10, 27, 24, 0.95), rgba(4, 9, 9, 0.96)),
@@ -555,7 +556,8 @@ h2 {
 .chat-panel,
 .storage-panel,
 .directory-panel,
-.document-panel {
+.document-panel,
+.utility-panel {
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -565,7 +567,8 @@ h2 {
 .chat-panel,
 .storage-panel,
 .directory-panel,
-.document-panel {
+.document-panel,
+.utility-panel {
   display: flex;
   flex-direction: column;
 }
@@ -1266,71 +1269,171 @@ h2 {
   font-size: 0.82rem;
 }
 
-.workspace--unix {
-  grid-template-columns: 1fr;
-  grid-template-rows: auto minmax(0, 1fr);
+.workspace--records {
+  grid-template-columns: minmax(230px, 290px) minmax(360px, 1fr) minmax(300px, 420px);
 }
 
-.unix-menubar,
-.unix-window,
-.unix-dock,
-.unix-panel,
-.unix-record-index,
-.unix-chat-window,
-.unix-thread-list {
-  border: 1px solid var(--line);
-  background: rgba(3, 9, 8, 0.84);
+.workspace--records .sidebar,
+.workspace--records .record-panel,
+.utility-panel {
+  min-width: 0;
 }
 
-.unix-menubar {
+.utility-panel {
+  background:
+    linear-gradient(180deg, rgba(9, 19, 18, 0.97), rgba(3, 8, 8, 0.98)),
+    var(--panel);
+}
+
+.utility-tabs {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  min-height: 72px;
-  padding: 12px 14px;
-  box-shadow: inset 0 -1px 0 rgba(83, 243, 138, 0.08);
+  align-items: flex-end;
+  gap: 4px;
+  min-height: 45px;
+  padding: 7px 7px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 
-.unix-menubar h2 {
-  color: #effff2;
-  font-size: 1rem;
+.utility-tabs::-webkit-scrollbar {
+  display: none;
 }
 
-.unix-command-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 220px;
-  padding: 8px 10px;
-  border: 1px solid rgba(77, 127, 113, 0.78);
-  background: #020706;
-  color: var(--green);
-}
-
-.unix-command-line span {
-  color: var(--amber);
-}
-
-.unix-workbench {
+.utility-tab {
   display: grid;
-  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
-  gap: 12px;
+  flex: 0 0 auto;
+  gap: 1px;
+  min-width: 104px;
+  max-width: 138px;
+  height: 38px;
+  padding: 5px 9px;
+  border: 1px solid rgba(36, 65, 59, 0.92);
+  border-bottom: 0;
+  background: rgba(5, 12, 11, 0.76);
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.utility-tab:hover,
+.utility-tab.is-active {
+  border-color: var(--line-strong);
+  background: rgba(83, 243, 138, 0.08);
+  color: #effff2;
+}
+
+.utility-tab.is-active {
+  color: var(--green);
+  box-shadow: inset 0 2px 0 var(--green);
+}
+
+.utility-tab span,
+.thread-row span,
+.thread-row em,
+.utility-pane-title span,
+.utility-card__header span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.utility-tab strong,
+.thread-row strong,
+.utility-pane-title strong,
+.utility-card__header strong {
+  overflow: hidden;
+  color: #f4fff5;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.utility-window {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-height: 0;
+  margin: 0 7px 7px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: rgba(2, 7, 6, 0.78);
   overflow: hidden;
 }
 
-.unix-dock {
+.utility-window__title,
+.utility-pane-title,
+.utility-card__header {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  padding: 10px;
-  overflow: auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 17, 16, 0.9);
 }
 
-.unix-dock__item,
-.unix-app-card,
+.utility-window__title span {
+  color: var(--cyan);
+  font-size: 0.72rem;
+}
+
+.utility-window__title strong {
+  color: #effff2;
+  font-size: 0.88rem;
+}
+
+.utility-card {
+  min-height: 0;
+  border: 1px solid rgba(36, 65, 59, 0.92);
+  background: rgba(5, 12, 11, 0.72);
+  overflow: hidden;
+}
+
+.utility-pre {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  color: #dff5e2;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.comm-tool,
+.shortwave-app,
+.clock-app {
+  display: grid;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+}
+
+.comm-tool {
+  grid-template-rows: minmax(112px, 0.34fr) minmax(0, 1fr);
+}
+
+.thread-list,
+.comm-window {
+  min-height: 0;
+  border: 1px solid var(--line);
+  background: rgba(3, 9, 8, 0.84);
+  overflow: hidden;
+}
+
+.thread-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.comm-window {
+  display: flex;
+  flex-direction: column;
+}
+
 .thread-row,
 .frequency-list button {
   border: 1px solid rgba(36, 65, 59, 0.9);
@@ -1340,16 +1443,21 @@ h2 {
   text-align: left;
 }
 
-.unix-dock__item {
+.thread-row {
   display: grid;
   gap: 3px;
-  min-height: 56px;
-  padding: 9px;
+  margin: 0 9px;
+  padding: 8px 9px;
 }
 
-.unix-dock__item:hover,
-.unix-dock__item.is-active,
-.unix-app-card:hover,
+.thread-row:first-of-type {
+  margin-top: 9px;
+}
+
+.thread-row:last-of-type {
+  margin-bottom: 9px;
+}
+
 .thread-row:hover,
 .thread-row.is-active,
 .frequency-list button:hover,
@@ -1358,233 +1466,14 @@ h2 {
   background: rgba(83, 243, 138, 0.08);
 }
 
-.unix-dock__item span,
-.unix-app-card__cmd,
-.unix-panel__header span,
-.unix-pane-title span,
-.thread-row span,
 .thread-row em {
-  color: var(--muted);
-  font-size: 0.72rem;
+  color: var(--amber);
+  font-style: normal;
 }
 
-.unix-dock__item strong,
-.unix-app-card strong,
-.unix-pane-title strong {
-  color: #f4fff5;
-  font-size: 0.88rem;
-}
-
-.unix-window {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.unix-window__bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 36px;
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(12, 23, 21, 0.94);
-}
-
-.unix-window__bar strong {
-  overflow: hidden;
-  color: var(--cyan);
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.unix-window__bar button {
-  min-width: 54px;
-  height: 24px;
-  border: 1px solid rgba(114, 217, 255, 0.58);
-  background: rgba(114, 217, 255, 0.08);
-  color: var(--cyan);
-  cursor: pointer;
-}
-
-.unix-window__dot {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 5px;
-  border: 1px solid var(--line-strong);
-  background: #020706;
-}
-
-.unix-window__body {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.unix-dashboard,
 .shortwave-app,
 .clock-app {
-  display: grid;
-  gap: 12px;
-  height: 100%;
-  min-height: 0;
-  padding: 12px;
-  overflow: hidden;
-}
-
-.unix-dashboard {
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
-  grid-template-rows: minmax(0, 1fr) minmax(150px, 0.45fr);
-}
-
-.unix-panel {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.unix-panel--apps {
-  grid-row: 1 / -1;
-}
-
-.unix-panel__header,
-.unix-pane-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 34px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(8, 17, 16, 0.88);
-}
-
-.unix-panel__header strong {
-  color: var(--amber);
-  font-size: 0.78rem;
-}
-
-.unix-app-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  height: calc(100% - 35px);
-  min-height: 0;
-  padding: 12px;
   overflow: auto;
-}
-
-.unix-app-card {
-  display: grid;
-  gap: 8px;
-  min-height: 132px;
-  padding: 12px;
-}
-
-.unix-app-card em {
-  align-self: end;
-  color: var(--amber);
-  font-style: normal;
-  font-size: 0.74rem;
-}
-
-.unix-process-list,
-.clock-table {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px 12px;
-  padding: 12px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.unix-process-list strong,
-.clock-table strong {
-  color: #effff2;
-}
-
-.unix-process-list em {
-  color: var(--green);
-  font-style: normal;
-}
-
-.unix-pre {
-  margin: 0;
-  padding: 12px;
-  overflow: auto;
-  color: #dff5e2;
-  font-size: 0.84rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
-.unix-record-app,
-.unix-comm-app {
-  display: grid;
-  gap: 12px;
-  height: 100%;
-  min-height: 0;
-  padding: 12px;
-  overflow: hidden;
-}
-
-.unix-record-app {
-  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
-}
-
-.unix-record-index,
-.unix-thread-list {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.unix-record-reader,
-.unix-record-reader .record-panel,
-.unix-chat-window {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.unix-chat-window {
-  display: flex;
-  flex-direction: column;
-}
-
-.unix-comm-app {
-  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
-}
-
-.unix-thread-list {
-  gap: 8px;
-  padding-bottom: 10px;
-}
-
-.thread-row {
-  display: grid;
-  gap: 4px;
-  margin: 0 10px;
-  padding: 10px;
-}
-
-.thread-row:first-of-type {
-  margin-top: 10px;
-}
-
-.thread-row em {
-  color: var(--amber);
-  font-style: normal;
-}
-
-.shortwave-app {
-  grid-template-columns: minmax(230px, 0.42fr) minmax(0, 0.58fr);
-  grid-template-rows: minmax(0, 1fr) minmax(160px, 0.44fr);
 }
 
 .shortwave-tuner {
@@ -1592,22 +1481,18 @@ h2 {
   flex-direction: column;
 }
 
-.shortwave-log {
-  grid-row: span 2;
-}
-
 .frequency-readout,
 .clock-readout {
   display: grid;
   gap: 6px;
-  padding: 18px;
+  padding: 16px;
   border-bottom: 1px solid var(--line);
 }
 
 .frequency-readout strong,
 .clock-readout strong {
   color: var(--green);
-  font-size: clamp(1.5rem, 2vw, 2.1rem);
+  font-size: 1.75rem;
 }
 
 .frequency-readout span,
@@ -1616,7 +1501,7 @@ h2 {
 .clock-readout em {
   color: var(--muted);
   font-style: normal;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
 }
 
 .signal-meter {
@@ -1624,8 +1509,8 @@ h2 {
   grid-template-columns: repeat(6, 1fr);
   align-items: end;
   gap: 5px;
-  height: 72px;
-  padding: 12px 18px;
+  height: 64px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1644,12 +1529,11 @@ h2 {
 .frequency-list {
   display: grid;
   gap: 7px;
-  padding: 12px;
-  overflow: auto;
+  padding: 10px;
 }
 
 .frequency-list button {
-  min-height: 34px;
+  min-height: 32px;
   padding: 7px 9px;
 }
 
@@ -1657,8 +1541,7 @@ h2 {
   display: grid;
   grid-template-rows: repeat(8, 1fr);
   gap: 5px;
-  height: calc(100% - 35px);
-  min-height: 120px;
+  min-height: 138px;
   padding: 12px;
 }
 
@@ -1668,28 +1551,28 @@ h2 {
   background: linear-gradient(90deg, rgba(83, 243, 138, 0.14), rgba(114, 217, 255, 0.58));
 }
 
-.clock-app {
-  grid-template-columns: minmax(260px, 0.8fr) minmax(260px, 1fr);
-  grid-template-rows: minmax(170px, 0.45fr) minmax(0, 1fr);
-}
-
-.clock-face {
-  grid-row: span 2;
-}
-
 .clock-readout {
   place-items: center;
-  height: calc(100% - 35px);
+  min-height: 148px;
   text-align: center;
 }
 
 .clock-readout strong {
-  font-size: clamp(2.6rem, 5vw, 5rem);
+  font-size: 3rem;
   letter-spacing: 0;
 }
 
 .clock-table {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.clock-table strong {
+  color: #effff2;
 }
 
 .terminal-bar {
@@ -1715,31 +1598,23 @@ h2 {
     grid-template-rows: minmax(0, 0.72fr) minmax(190px, 0.58fr);
   }
 
-  .workspace--unix {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
+  .workspace--records {
+    grid-template-columns: minmax(220px, 0.38fr) minmax(320px, 0.62fr);
+    grid-template-rows: minmax(0, 0.62fr) minmax(220px, 0.38fr);
   }
 
-  .unix-workbench {
-    grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  .workspace--records .utility-panel {
+    grid-column: 1 / -1;
   }
 
-  .unix-dashboard,
+  .comm-tool {
+    grid-template-columns: minmax(190px, 0.34fr) minmax(0, 0.66fr);
+    grid-template-rows: 1fr;
+  }
+
   .shortwave-app,
   .clock-app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    overflow: auto;
-  }
-
-  .unix-panel--apps,
-  .shortwave-log,
-  .clock-face {
-    grid-row: auto;
-  }
-
-  .unix-record-app {
-    grid-template-columns: minmax(210px, 0.38fr) minmax(0, 0.62fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .chat-panel {
@@ -1817,53 +1692,28 @@ h2 {
     grid-template-rows: minmax(104px, 0.26fr) minmax(156px, 0.32fr) minmax(220px, 0.42fr);
   }
 
-  .workspace--unix {
-    grid-template-rows: auto minmax(0, 1fr);
+  .workspace--records {
+    grid-template-rows: minmax(124px, 0.28fr) minmax(240px, 0.42fr) minmax(210px, 0.3fr);
   }
 
-  .unix-menubar {
-    align-items: stretch;
-    flex-direction: column;
-    min-height: auto;
+  .workspace--records .utility-panel {
+    grid-column: auto;
   }
 
-  .unix-command-line {
-    min-width: 0;
+  .utility-tab {
+    min-width: 116px;
   }
 
-  .unix-workbench,
-  .unix-record-app,
-  .unix-comm-app {
+  .comm-tool,
+  .shortwave-app,
+  .clock-app {
     grid-template-columns: 1fr;
-  }
-
-  .unix-workbench {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .unix-dock {
-    display: grid;
-    grid-auto-columns: minmax(118px, 1fr);
-    grid-auto-flow: column;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .unix-dock__item {
-    min-height: 48px;
-  }
-
-  .unix-window__body {
+    grid-template-rows: auto;
     overflow: auto;
   }
 
-  .unix-record-index,
-  .unix-thread-list {
-    max-height: 220px;
-  }
-
-  .unix-app-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .thread-list {
+    max-height: 148px;
   }
 
   .workspace-switcher {

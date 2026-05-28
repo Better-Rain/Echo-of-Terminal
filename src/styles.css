@@ -707,6 +707,15 @@ h2 {
   font-size: 0.76rem;
 }
 
+.document-row--directory .document-row__icon {
+  border-color: rgba(114, 217, 255, 0.5);
+  color: var(--cyan);
+}
+
+.document-row--parent {
+  background: rgba(6, 17, 16, 0.84);
+}
+
 .storage-row__main,
 .document-row__main {
   min-width: 0;
@@ -773,6 +782,14 @@ h2 {
   padding-left: 12px;
   border-left: 2px solid rgba(77, 127, 113, 0.72);
   line-height: 1.6;
+}
+
+.document-body--empty {
+  color: var(--dim);
+}
+
+.document-body--empty p {
+  border-left-style: dashed;
 }
 
 .document-tags {

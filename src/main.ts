@@ -41,7 +41,7 @@ let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
 let workspaceView: 'files' | 'records' = 'files';
 let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
-let selectedDocumentId = 'local-session-log';
+let selectedDocumentId = '';
 let showUsbNotice = false;
 let mountSequenceScheduled = false;
 let loginError = '';
@@ -61,7 +61,7 @@ function enterArchiveShell(): void {
   workspaceView = 'files';
   mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
-  selectedDocumentId = 'local-session-log';
+  selectedDocumentId = '';
   showUsbNotice = false;
   render();
   scheduleMountSequence();
@@ -91,7 +91,7 @@ function openUsbDirectory(): void {
 
   workspaceView = 'files';
   selectedDirectoryId = 'usb-root';
-  selectedDocumentId = 'commission-brief';
+  selectedDocumentId = '';
   showUsbNotice = false;
   render();
 }
@@ -289,22 +289,39 @@ function isVolumeVisible(volumeId: string): boolean {
   return getVisibleVolumes().some((volume) => volume.id === volumeId);
 }
 
+function getDirectory(directoryId: string | undefined): VirtualDirectory | undefined {
+  return virtualDirectories.find((item) => item.id === directoryId);
+}
+
 function getSelectedDirectory(): VirtualDirectory | undefined {
-  const directory = virtualDirectories.find((item) => item.id === selectedDirectoryId);
+  const directory = getDirectory(selectedDirectoryId);
 
   if (directory && isVolumeVisible(directory.volumeId)) return directory;
 
-  return virtualDirectories.find((item) => item.id === 'local-root' && isVolumeVisible(item.volumeId));
+  const fallbackDirectory = getDirectory('local-root');
+  if (fallbackDirectory && isVolumeVisible(fallbackDirectory.volumeId)) return fallbackDirectory;
+
+  return undefined;
 }
 
 function getSelectedDocument(directory: VirtualDirectory): VirtualDocument | undefined {
-  const documentInDirectory = virtualDocuments.find(
+  if (!selectedDocumentId) return undefined;
+
+  return virtualDocuments.find(
     (document) => document.id === selectedDocumentId && document.directoryId === directory.id,
   );
+}
 
-  if (documentInDirectory) return documentInDirectory;
+function getChildDirectories(directory: VirtualDirectory): VirtualDirectory[] {
+  return directory.directoryIds
+    .map((directoryId) => getDirectory(directoryId))
+    .filter((item): item is VirtualDirectory => Boolean(item));
+}
 
-  return virtualDocuments.find((document) => document.id === directory.fileIds[0]);
+function getDirectoryDocuments(directory: VirtualDirectory): VirtualDocument[] {
+  return directory.fileIds
+    .map((fileId) => virtualDocuments.find((document) => document.id === fileId))
+    .filter((document): document is VirtualDocument => Boolean(document));
 }
 
 function getVolume(volumeId: string): VirtualVolume {
@@ -326,6 +343,7 @@ function renderWorkspaceSwitcher(): string {
 
 function renderStorageTree(): string {
   const visibleVolumes = getVisibleVolumes();
+  const activeDirectory = getDirectory(selectedDirectoryId);
   const pendingExternalMarkup =
     mountStage === 'local-mounted'
       ? renderMountStatus(
@@ -341,7 +359,7 @@ function renderStorageTree(): string {
 
   const volumeRows = visibleVolumes
     .map((volume) => {
-      const selected = selectedDirectoryId === volume.rootDirectoryId ? 'is-selected' : '';
+      const selected = activeDirectory?.volumeId === volume.id ? 'is-selected' : '';
 
       return `
         <button class="storage-row ${selected}" type="button" data-directory-id="${volume.rootDirectoryId}">
@@ -369,12 +387,41 @@ function renderMountStatus(label: string, title: string, message: string): strin
   `;
 }
 
-function renderDirectoryList(directory: VirtualDirectory): string {
-  const documents = directory.fileIds
-    .map((fileId) => virtualDocuments.find((document) => document.id === fileId))
-    .filter((document): document is VirtualDocument => Boolean(document));
+function renderDirectoryRow(directory: VirtualDirectory, icon = 'DIR'): string {
+  const directoryCount = directory.directoryIds.length;
+  const fileCount = directory.fileIds.length;
 
-  return documents
+  return `
+    <button class="document-row document-row--directory" type="button" data-directory-id="${directory.id}">
+      <span class="document-row__icon">${icon}</span>
+      <span class="document-row__main">
+        <span class="document-row__name">${directory.name}</span>
+        <span class="document-row__summary">${directory.summary}</span>
+      </span>
+      <span class="document-row__meta">${directoryCount} DIR / ${fileCount} FILE</span>
+    </button>
+  `;
+}
+
+function renderParentDirectoryRow(directory: VirtualDirectory): string {
+  const parentDirectory = getDirectory(directory.parentId);
+  if (!parentDirectory) return '';
+
+  return `
+    <button class="document-row document-row--directory document-row--parent" type="button" data-directory-id="${parentDirectory.id}">
+      <span class="document-row__icon">..</span>
+      <span class="document-row__main">
+        <span class="document-row__name">返回上级目录</span>
+        <span class="document-row__summary">${parentDirectory.path}</span>
+      </span>
+      <span class="document-row__meta">DIR</span>
+    </button>
+  `;
+}
+
+function renderDirectoryList(directory: VirtualDirectory): string {
+  const directoryRows = getChildDirectories(directory).map((childDirectory) => renderDirectoryRow(childDirectory)).join('');
+  const documentRows = getDirectoryDocuments(directory)
     .map((document) => {
       const selected = document.id === selectedDocumentId ? 'is-selected' : '';
 
@@ -390,6 +437,11 @@ function renderDirectoryList(directory: VirtualDirectory): string {
       `;
     })
     .join('');
+  const rows = renderParentDirectoryRow(directory) + directoryRows + documentRows;
+
+  if (rows) return rows;
+
+  return renderMountStatus('EMPTY DIRECTORY', '没有可见项目', '该目录当前没有可读文件或下级目录。');
 }
 
 function renderDocumentPreview(document: VirtualDocument | undefined): string {
@@ -399,9 +451,12 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
         <header class="panel-header">
           <div>
             <p class="eyebrow">PREVIEW</p>
-            <h2>未选择文档</h2>
+            <h2>等待文件打开</h2>
           </div>
         </header>
+        <article class="document-body document-body--empty">
+          <p>当前没有打开的只读文档。请从目录列表中选择文件。</p>
+        </article>
       </section>
     `;
   }
@@ -502,7 +557,7 @@ function renderFileManagerWorkspace(): string {
         </header>
         <div class="directory-meta">
           <span>${volume.description}</span>
-          <span>${directory.fileIds.length} FILES</span>
+          <span>${directory.directoryIds.length} DIRS / ${directory.fileIds.length} FILES</span>
         </div>
         <div class="document-list">
           ${renderDirectoryList(directory)}
@@ -840,7 +895,7 @@ function bindArchiveEvents(): void {
       if (!directory) return;
 
       selectedDirectoryId = directory.id;
-      selectedDocumentId = directory.fileIds[0] ?? '';
+      selectedDocumentId = '';
       showUsbNotice = false;
       render();
     });

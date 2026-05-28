@@ -146,7 +146,9 @@ export type VirtualDirectory = {
   volumeId: string;
   name: string;
   path: string;
+  summary: string;
   parentId?: string;
+  directoryIds: string[];
   fileIds: string[];
 };
 

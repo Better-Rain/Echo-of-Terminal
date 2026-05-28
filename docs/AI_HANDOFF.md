@@ -46,7 +46,8 @@ Last updated: 2026-05-28.
 - First-stage login flow is playable: boot self-check -> readonly `访客#0719` login -> placeholder password `0719` -> auth feedback -> archive shell.
 - Second-stage entry now has a staged mount sequence: file manager scan -> delayed local disk mount -> delayed external media mount.
 - Switching a volume or directory only changes the directory view; documents open only after the player clicks a file row.
-- Local disk is now a small directory tree (`SYSTEM`, `COMMUNICATIONS`, `RECORDS`, `USERS`, `TEMP`) with recovery/damaged logs under `SYSTEM/LOGS/`.
+- Local disk is now a small directory tree (`SYSTEM`, `COMMUNICATIONS`, `RECORDS`, `USERS`, `TEMP`) with one current-session log and several past time-window damaged logs under `SYSTEM/LOGS/`.
+- File and directory rows intentionally show only names plus compact counts/sizes, without explanatory subtitle text.
 - The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose.
 - USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
 - The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
@@ -63,7 +64,7 @@ Last updated: 2026-05-28.
 7. After a second delay, the external media appears to simulate the protagonist inserting the storage device, and a bottom-right OS-like removable-drive prompt appears.
 8. Clicking the notice opens the USB root directory.
 9. USB contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission document with a European-style ministry header and sign-off; the document is not opened automatically.
-10. Local disk contains damaged logs in `DISK://LOCAL/SYSTEM/LOGS/`.
+10. Local disk contains the current login log plus past damaged log windows in `DISK://LOCAL/SYSTEM/LOGS/`.
 11. Top navigation switches between `文件管理器` and `档案记录`.
 
 ## Current Structure
@@ -92,7 +93,7 @@ Last updated: 2026-05-28.
 
 - Login puzzle is intentionally simple and can be replaced later.
 - Avatar/original account owner image is still a placeholder.
-- File manager currently has one delayed USB commission document plus a local disk directory tree with several damaged/recovery logs.
+- File manager currently has one delayed USB commission document plus a local disk directory tree with one current login log and several damaged historical log windows.
 - Archive records and chat are sample content, not final story canon.
 
 ## Useful Git Checkpoints

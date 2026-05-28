@@ -146,7 +146,6 @@ export type VirtualDirectory = {
   volumeId: string;
   name: string;
   path: string;
-  summary: string;
   parentId?: string;
   directoryIds: string[];
   fileIds: string[];
@@ -160,7 +159,6 @@ export type VirtualDocument = {
   modified: string;
   sizeLabel: string;
   classification: string;
-  summary: string;
   body: string[];
   tags: string[];
 };

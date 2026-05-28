@@ -725,7 +725,6 @@ h2 {
 .storage-row__device,
 .storage-row__path,
 .document-row__name,
-.document-row__summary,
 .document-row__meta {
   display: block;
   overflow-wrap: anywhere;
@@ -739,7 +738,6 @@ h2 {
 
 .storage-row__device,
 .storage-row__path,
-.document-row__summary,
 .document-row__meta {
   color: var(--muted);
   font-size: 0.76rem;

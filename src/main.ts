@@ -396,7 +396,6 @@ function renderDirectoryRow(directory: VirtualDirectory, icon = 'DIR'): string {
       <span class="document-row__icon">${icon}</span>
       <span class="document-row__main">
         <span class="document-row__name">${directory.name}</span>
-        <span class="document-row__summary">${directory.summary}</span>
       </span>
       <span class="document-row__meta">${directoryCount} DIR / ${fileCount} FILE</span>
     </button>
@@ -412,7 +411,6 @@ function renderParentDirectoryRow(directory: VirtualDirectory): string {
       <span class="document-row__icon">..</span>
       <span class="document-row__main">
         <span class="document-row__name">返回上级目录</span>
-        <span class="document-row__summary">${parentDirectory.path}</span>
       </span>
       <span class="document-row__meta">DIR</span>
     </button>
@@ -430,7 +428,6 @@ function renderDirectoryList(directory: VirtualDirectory): string {
           <span class="document-row__icon">${document.extension}</span>
           <span class="document-row__main">
             <span class="document-row__name">${document.name}.${document.extension}</span>
-            <span class="document-row__summary">${document.summary}</span>
           </span>
           <span class="document-row__meta">${document.sizeLabel}</span>
         </button>
@@ -467,10 +464,6 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
         <div>
           <p class="eyebrow">DOCUMENT</p>
           <h2>${document.name}.${document.extension}</h2>
-        </div>
-        <div class="clearance-block">
-          <span>标记</span>
-          <strong>${document.classification}</strong>
         </div>
       </header>
       <div class="record-grid">

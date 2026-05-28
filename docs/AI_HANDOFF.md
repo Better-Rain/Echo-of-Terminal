@@ -52,6 +52,7 @@ Last updated: 2026-05-28.
 - The right-side auxiliary area uses browser-like tabs and shows one tool at a time: `secure-comm`, `rx-shortwave`, or `clockctl`.
 - `secure-comm` is a narrow-app flow, not a split pane: it opens to the communication list, enters one conversation after a thread click, and has a back control to return to the list.
 - Auxiliary tools render directly inside the shared `utility-window`; avoid reintroducing nested window shells such as `comm-window` inside app-specific wrappers.
+- `rx-shortwave` currently uses a simplified receiver face with a tuning knob, editable frequency field, signal meter, decode buffer, and waterfall display.
 - The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose.
 - USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
 - The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.

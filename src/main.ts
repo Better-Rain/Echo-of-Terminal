@@ -868,56 +868,50 @@ function renderUtilityTabs(): string {
 
 function renderShortwaveTool(): string {
   return `
-    <section class="utility-card shortwave-tuner">
-      <header class="utility-card__header">
-        <span>/dev/radio0</span>
-        <strong>RX-SHORTWAVE</strong>
-      </header>
-      <div class="frequency-readout">
-        <span>FREQ</span>
-        <strong>6.107 MHz</strong>
-        <em>AM / NARROW</em>
+    <div class="shortwave-tuner">
+      <button class="tuning-knob" type="button" aria-label="调频旋钮">
+        <span></span>
+      </button>
+      <label class="frequency-input">
+        <span>FREQ / MHz</span>
+        <input type="text" inputmode="decimal" value="6.107" aria-label="短波频率" />
+      </label>
+      <div class="receiver-state">
+        <span>MODE</span>
+        <strong>AM / NARROW</strong>
+        <em>LOCK</em>
       </div>
+    </div>
+
+    <div class="shortwave-signal">
       <div class="signal-meter" aria-label="信号强度">
         <span></span><span></span><span></span><span></span><span></span><span></span>
       </div>
-      <div class="frequency-list">
-        <button type="button" class="is-active">6.107 MHz</button>
-        <button type="button">7.190 MHz</button>
-        <button type="button">9.421 MHz</button>
-        <button type="button">11.719 MHz</button>
+      <div class="signal-scale">
+        <span>3.0</span>
+        <span>6.0</span>
+        <span>9.0</span>
+        <span>12.0</span>
       </div>
-    </section>
+    </div>
 
-    <section class="utility-card shortwave-log">
-      <header class="utility-card__header">
-        <span>rx-buffer</span>
-        <strong>DECODE</strong>
-      </header>
-      <pre class="utility-pre">00:16:02 carrier lock
+    <pre class="utility-pre shortwave-buffer">00:16:02 carrier lock
 00:16:08 ... --- ... / NOT DISTRESS
 00:16:19 voice fragment: 灯塔 / 二级透镜 / 061
 00:16:31 burst: 07 19 07 19
 00:16:44 noise floor rising
 00:17:00 carrier lost</pre>
-    </section>
 
-    <section class="utility-card shortwave-spectrum">
-      <header class="utility-card__header">
-        <span>waterfall</span>
-        <strong>SPECTRUM</strong>
-      </header>
-      <div class="waterfall" aria-hidden="true">
-        <span style="--level: 18%"></span>
-        <span style="--level: 42%"></span>
-        <span style="--level: 31%"></span>
-        <span style="--level: 76%"></span>
-        <span style="--level: 48%"></span>
-        <span style="--level: 63%"></span>
-        <span style="--level: 24%"></span>
-        <span style="--level: 54%"></span>
-      </div>
-    </section>
+    <div class="waterfall" aria-hidden="true">
+      <span style="--level: 18%"></span>
+      <span style="--level: 42%"></span>
+      <span style="--level: 31%"></span>
+      <span style="--level: 76%"></span>
+      <span style="--level: 48%"></span>
+      <span style="--level: 63%"></span>
+      <span style="--level: 24%"></span>
+      <span style="--level: 54%"></span>
+    </div>
   `;
 }
 

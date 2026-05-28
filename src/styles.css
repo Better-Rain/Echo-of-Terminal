@@ -1286,13 +1286,15 @@ h2 {
 }
 
 .utility-tabs {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: flex-end;
   gap: 4px;
   min-height: 56px;
   padding: 8px 7px 0;
-  border-bottom: 1px solid var(--line);
-  overflow-x: auto;
+  border-bottom: 0;
+  overflow-x: visible;
   overflow-y: visible;
   scrollbar-width: none;
 }
@@ -1307,7 +1309,7 @@ h2 {
   align-content: center;
   flex: 0 0 auto;
   gap: 1px;
-  min-width: 104px;
+  min-width: 96px;
   max-width: 138px;
   min-height: 48px;
   padding: 6px 9px;
@@ -1327,18 +1329,19 @@ h2 {
 
 .utility-tab.is-active {
   z-index: 1;
-  border-bottom-color: transparent;
+  border-bottom-color: rgba(2, 7, 6, 0.98);
   background: rgba(2, 7, 6, 0.92);
   color: var(--green);
   box-shadow: inset 0 2px 0 var(--green);
+  transform: translateY(1px);
 }
 
 .utility-tab.is-active::after {
   position: absolute;
   right: 0;
-  bottom: -1px;
+  bottom: -2px;
   left: 0;
-  height: 1px;
+  height: 2px;
   background: rgba(2, 7, 6, 0.98);
   content: "";
 }
@@ -1370,9 +1373,8 @@ h2 {
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  margin: 0 7px 7px;
+  margin: -1px 7px 7px;
   border: 1px solid var(--line);
-  border-top: 0;
   background: rgba(2, 7, 6, 0.78);
   overflow: hidden;
 }
@@ -1421,16 +1423,16 @@ h2 {
   display: grid;
   align-content: start;
   flex: 1;
-  gap: 8px;
+  gap: 0;
   min-height: 0;
-  padding: 10px;
+  padding: 0;
   overflow: auto;
 }
 
-.thread-row,
-.frequency-list button {
-  border: 1px solid rgba(36, 65, 59, 0.9);
-  background: rgba(5, 12, 11, 0.78);
+.thread-row {
+  border: 0;
+  border-bottom: 1px solid rgba(36, 65, 59, 0.9);
+  background: transparent;
   color: inherit;
   cursor: pointer;
   text-align: left;
@@ -1456,9 +1458,7 @@ h2 {
 }
 
 .thread-row:hover,
-.thread-row.is-active,
-.frequency-list button:hover,
-.frequency-list button.is-active {
+.thread-row.is-active {
   border-color: var(--green);
   background: rgba(83, 243, 138, 0.08);
 }
@@ -1500,22 +1500,109 @@ h2 {
   overflow: auto;
 }
 
-.utility-window--shortwave .utility-card,
 .utility-window--clock .utility-card {
   margin: 10px 10px 0;
 }
 
-.utility-window--shortwave .utility-card:last-child,
 .utility-window--clock .utility-card:last-child {
   margin-bottom: 10px;
 }
 
 .shortwave-tuner {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px 14px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(5, 12, 11, 0.52);
 }
 
-.frequency-readout,
+.tuning-knob {
+  position: relative;
+  display: grid;
+  grid-row: 1 / 3;
+  width: 86px;
+  height: 86px;
+  border: 1px solid rgba(114, 217, 255, 0.58);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(114, 217, 255, 0.15) 0 18%, transparent 19%),
+    radial-gradient(circle at 50% 50%, #071412 0 42%, rgba(83, 243, 138, 0.1) 43% 48%, #020706 49% 100%);
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.72),
+    0 0 18px rgba(83, 243, 138, 0.08);
+  cursor: pointer;
+  place-items: center;
+}
+
+.tuning-knob::before {
+  position: absolute;
+  top: 8px;
+  width: 2px;
+  height: 24px;
+  background: var(--green);
+  box-shadow: 0 0 10px rgba(83, 243, 138, 0.8);
+  content: "";
+  transform: rotate(32deg);
+  transform-origin: 50% 35px;
+}
+
+.tuning-knob span {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: #020706;
+}
+
+.frequency-input {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.frequency-input span,
+.receiver-state span,
+.receiver-state em,
+.signal-scale {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.frequency-input input {
+  width: 100%;
+  height: 38px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(77, 127, 113, 0.72);
+  border-radius: 0;
+  outline: none;
+  background: #020706;
+  color: var(--green);
+  font-size: 1.3rem;
+}
+
+.frequency-input input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(83, 243, 138, 0.14);
+}
+
+.receiver-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(36, 65, 59, 0.74);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.receiver-state strong {
+  color: #effff2;
+  font-size: 0.82rem;
+}
+
 .clock-readout {
   display: grid;
   gap: 6px;
@@ -1523,14 +1610,11 @@ h2 {
   border-bottom: 1px solid var(--line);
 }
 
-.frequency-readout strong,
 .clock-readout strong {
   color: var(--green);
   font-size: 1.75rem;
 }
 
-.frequency-readout span,
-.frequency-readout em,
 .clock-readout span,
 .clock-readout em {
   color: var(--muted);
@@ -1543,9 +1627,7 @@ h2 {
   grid-template-columns: repeat(6, 1fr);
   align-items: end;
   gap: 5px;
-  height: 64px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+  height: 58px;
 }
 
 .signal-meter span {
@@ -1560,15 +1642,15 @@ h2 {
 .signal-meter span:nth-child(5) { height: 42%; }
 .signal-meter span:nth-child(6) { height: 24%; }
 
-.frequency-list {
-  display: grid;
-  gap: 7px;
-  padding: 10px;
+.shortwave-signal {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line);
 }
 
-.frequency-list button {
-  min-height: 32px;
-  padding: 7px 9px;
+.signal-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
 }
 
 .waterfall {
@@ -1576,7 +1658,11 @@ h2 {
   grid-template-rows: repeat(8, 1fr);
   gap: 5px;
   min-height: 138px;
-  padding: 12px;
+  padding: 12px 14px;
+}
+
+.shortwave-buffer {
+  border-bottom: 1px solid var(--line);
 }
 
 .waterfall span {
@@ -1725,7 +1811,7 @@ h2 {
   }
 
   .utility-tab {
-    min-width: 116px;
+    min-width: 96px;
   }
 
   .workspace-switcher {

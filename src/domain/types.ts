@@ -167,4 +167,13 @@ export type VirtualDocument = {
   classification: string;
   body: string[];
   tags: string[];
+  unlock?: {
+    key: string;
+    prompt: string;
+    lockedBody: string[];
+    successMessage: string;
+    failureMessage: string;
+    discoveredFlag?: string;
+    solvedPuzzleId?: string;
+  };
 };

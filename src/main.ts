@@ -43,6 +43,38 @@ type UtilityAppMeta = {
   status: string;
 };
 
+type ShortwaveLogTone = 'noise' | 'scan' | 'near' | 'lock' | 'hint' | 'success';
+
+type ShortwaveLogEntry = {
+  id: number;
+  tone: ShortwaveLogTone;
+  message: string;
+};
+
+type ShortwaveSignalTarget = {
+  id: string;
+  label: string;
+  centerMhz: number;
+  phaseRad: number;
+  phaseToleranceRad: number;
+  phaseDetectionRangeRad: number;
+  lockToleranceKhz: number;
+  detectionRangeKhz: number;
+  reportName: string;
+  keyFormat: string;
+  documentId?: string;
+};
+
+type ShortwaveSignalReading = {
+  target: ShortwaveSignalTarget;
+  detuneKhz: number;
+  distanceKhz: number;
+  phaseDistanceRad: number;
+  phaseStrength: number;
+  strength: number;
+  locked: boolean;
+};
+
 const utilityApps: UtilityAppMeta[] = [
   {
     id: 'communications',
@@ -77,20 +109,50 @@ let communicationsReturnView: CommunicationsReturnView = 'threads';
 let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = '';
+const unlockedDocumentIds = new Set<string>();
 let shortwaveFrequencyMhz = 6.107;
-let shortwaveOffsetKhz = 0;
+let shortwavePhaseRad = 0;
 let fileSearchQuery = '';
 let showUsbNotice = false;
 let mountSequenceScheduled = false;
 let loginError = '';
+let documentUnlockError = '';
 
 const shortwaveMinMhz = 3;
 const shortwaveMaxMhz = 12;
-const shortwaveOffsetMinKhz = -80;
-const shortwaveOffsetMaxKhz = 80;
-const shortwaveDragSensitivityMhz = 0.018;
-const shortwaveTargetCenterMhz = 6.107;
-const shortwaveTargetOffsetKhz = 42;
+const shortwavePhaseMinRad = 0;
+const shortwavePhaseMaxRad = 6.283;
+const shortwaveFrequencyDragSensitivityMhz = 0.004;
+const shortwavePhaseStepRad = 0.01;
+const shortwaveWaterfallColumns = 18;
+const shortwaveWaterfallRows = 9;
+
+const shortwaveSignalTargets: ShortwaveSignalTarget[] = [
+  {
+    id: 'northline-061',
+    label: '北线镜像报告 061',
+    centerMhz: 6.107,
+    phaseRad: 1.319,
+    phaseToleranceRad: 0.035,
+    phaseDetectionRangeRad: 0.42,
+    lockToleranceKhz: 2,
+    detectionRangeKhz: 90,
+    reportName: 'REPORT_NORTHLINE_061.enc',
+    keyFormat: 'JANUS-0719-{四位校验码}',
+    documentId: 'report-northline-061',
+  },
+];
+
+let shortwaveLogSequence = 6;
+let shortwaveLastLockedTargetId = '';
+const shortwaveLogEntries: ShortwaveLogEntry[] = [
+  { id: 1, tone: 'scan', message: '00:16:02 接收器启动，监听短波载波。' },
+  { id: 2, tone: 'hint', message: '00:16:08 中心振荡器与相位校准器已就绪。' },
+  { id: 3, tone: 'noise', message: '00:16:19 背景噪声稳定，未发现可读报告头。' },
+  { id: 4, tone: 'scan', message: '00:16:31 解码缓存为空。' },
+  { id: 5, tone: 'hint', message: '00:16:44 同步门限未满足。' },
+  { id: 6, tone: 'noise', message: '00:17:00 等待调谐。' },
+];
 
 function startBootSequence(): void {
   render();
@@ -371,6 +433,15 @@ function getSelectedDocument(directory: VirtualDirectory): VirtualDocument | und
   );
 }
 
+function isDocumentUnlocked(document: VirtualDocument): boolean {
+  return !document.unlock || unlockedDocumentIds.has(document.id);
+}
+
+function getDocumentBody(document: VirtualDocument): string[] {
+  if (isDocumentUnlocked(document)) return document.body;
+  return document.unlock?.lockedBody ?? document.body;
+}
+
 function getChildDirectories(directory: VirtualDirectory): VirtualDirectory[] {
   return directory.directoryIds
     .map((directoryId) => getDirectory(directoryId))
@@ -400,13 +471,14 @@ function getVisibleDocuments(): VirtualDocument[] {
 }
 
 function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): boolean {
+  const searchableBody = isDocumentUnlocked(document) ? document.body : document.unlock?.lockedBody ?? document.body;
   const haystack = [
     document.name,
     document.extension,
     document.classification,
     getDocumentPath(document),
     ...document.tags,
-    ...document.body,
+    ...searchableBody,
   ]
     .join(' ')
     .toLowerCase();
@@ -561,7 +633,7 @@ function renderFileSearchForm(): string {
   return `
     <form class="file-search" id="fileSearchForm">
       <span>SEARCH</span>
-      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" placeholder="offset / signal / report" aria-label="搜索文件" />
+      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" placeholder="phase / signal_log / 报告名" aria-label="搜索文件" />
       <button type="submit">搜索</button>
       ${fileSearchQuery ? '<button type="button" data-file-search-clear>清除</button>' : ''}
     </form>
@@ -593,6 +665,8 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
     `;
   }
 
+  const documentBody = getDocumentBody(document);
+
   return `
     <section class="document-panel" aria-label="文档预览">
       <header class="panel-header">
@@ -611,13 +685,42 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
           <strong>${document.sizeLabel}</strong>
         </div>
       </div>
-      <article class="document-body">
-        ${document.body.map((paragraph) => `<p>${paragraph}</p>`).join('')}
+      <article class="document-body ${document.unlock && !isDocumentUnlocked(document) ? 'document-body--locked' : ''}">
+        ${documentBody.map((paragraph) => `<p>${paragraph}</p>`).join('')}
       </article>
+      ${renderDocumentUnlockPanel(document)}
       <div class="document-tags">
         ${document.tags.map((tag) => `<span>${tag}</span>`).join('')}
       </div>
     </section>
+  `;
+}
+
+function renderDocumentUnlockPanel(document: VirtualDocument): string {
+  if (!document.unlock) return '';
+
+  if (isDocumentUnlocked(document)) {
+    return `
+      <div class="document-unlock document-unlock--success">
+        <p class="eyebrow">解锁记录</p>
+        <strong>${document.unlock.successMessage}</strong>
+      </div>
+    `;
+  }
+
+  return `
+    <form class="document-unlock" id="documentUnlockForm">
+      <div>
+        <p class="eyebrow">加密校验</p>
+        <strong>${document.unlock.prompt}</strong>
+      </div>
+      <label>
+        <span>密钥</span>
+        <input type="text" name="documentKey" autocomplete="off" placeholder="JANUS-0719-0000" />
+      </label>
+      ${documentUnlockError ? `<p class="document-unlock__error">${documentUnlockError}</p>` : ''}
+      <button type="submit">提交密钥</button>
+    </form>
   `;
 }
 
@@ -1072,29 +1175,68 @@ function tuneShortwaveFrequency(value: number): void {
   shortwaveFrequencyMhz = Number(formatShortwaveFrequency(value));
 }
 
-function clampShortwaveOffset(value: number): number {
-  return Math.min(shortwaveOffsetMaxKhz, Math.max(shortwaveOffsetMinKhz, Math.round(value)));
+function clampShortwavePhase(value: number): number {
+  const clamped = Math.min(shortwavePhaseMaxRad, Math.max(shortwavePhaseMinRad, value));
+  return Math.round(clamped * 1000) / 1000;
 }
 
-function formatShortwaveOffset(value: number): string {
-  const offset = clampShortwaveOffset(value);
-  return `${offset >= 0 ? '+' : '-'}${String(Math.abs(offset)).padStart(3, '0')}`;
+function formatShortwavePhase(value: number): string {
+  return clampShortwavePhase(value).toFixed(3);
 }
 
-function tuneShortwaveOffset(value: number): void {
-  shortwaveOffsetKhz = clampShortwaveOffset(value);
+function tuneShortwavePhase(value: number): void {
+  shortwavePhaseRad = clampShortwavePhase(value);
 }
 
-function getShortwaveEffectiveFrequencyMhz(): number {
-  return shortwaveFrequencyMhz + shortwaveOffsetKhz / 1000;
+function getShortwaveWaterfallJitter(rowIndex: number, columnIndex: number, seed: number): number {
+  const jitter = Math.sin((rowIndex + 1) * 12.9898 + (columnIndex + 1) * 78.233 + seed * 37.719) * 43758.5453;
+  return jitter - Math.floor(jitter);
 }
 
-function getShortwaveTargetFrequencyMhz(): number {
-  return shortwaveTargetCenterMhz + shortwaveTargetOffsetKhz / 1000;
+function getShortwavePhaseDistanceRad(value: number, target: number): number {
+  const rawDistance = Math.abs(value - target) % shortwavePhaseMaxRad;
+  return Math.min(rawDistance, shortwavePhaseMaxRad - rawDistance);
 }
 
-function hasShortwaveReportLock(): boolean {
-  return Math.abs(getShortwaveEffectiveFrequencyMhz() - getShortwaveTargetFrequencyMhz()) <= 0.002;
+function getShortwaveTargetFrequencyMhz(target: ShortwaveSignalTarget): number {
+  return target.centerMhz;
+}
+
+function getShortwaveSyncChecksum(target: ShortwaveSignalTarget): string {
+  const frequencyCode = Math.round(target.centerMhz * 1000);
+  const phaseCode = Math.round(target.phaseRad * 1000);
+  const checksum = (frequencyCode * 17 + phaseCode * 70) % 10000;
+  return String(checksum).padStart(4, '0');
+}
+
+function getShortwaveSyncSignature(target: ShortwaveSignalTarget): string {
+  return `RX-SIG-${getShortwaveSyncChecksum(target)}`;
+}
+
+function getShortwaveSignalReadings(): ShortwaveSignalReading[] {
+  return shortwaveSignalTargets.map((target) => {
+    const detuneKhz = (shortwaveFrequencyMhz - getShortwaveTargetFrequencyMhz(target)) * 1000;
+    const distanceKhz = Math.abs(detuneKhz);
+    const phaseDistanceRad = getShortwavePhaseDistanceRad(shortwavePhaseRad, target.phaseRad);
+    const strength = Math.max(0, 1 - distanceKhz / target.detectionRangeKhz);
+    const phaseStrength = Math.max(0, 1 - phaseDistanceRad / target.phaseDetectionRangeRad);
+
+    return {
+      target,
+      detuneKhz,
+      distanceKhz,
+      phaseDistanceRad,
+      phaseStrength,
+      strength,
+      locked: distanceKhz <= target.lockToleranceKhz && phaseDistanceRad <= target.phaseToleranceRad,
+    };
+  });
+}
+
+function getClosestShortwaveSignal(): ShortwaveSignalReading {
+  return getShortwaveSignalReadings().sort(
+    (a, b) => a.distanceKhz - b.distanceKhz || a.phaseDistanceRad - b.phaseDistanceRad,
+  )[0];
 }
 
 function getShortwaveKnobAngle(): number {
@@ -1104,65 +1246,187 @@ function getShortwaveKnobAngle(): number {
 }
 
 function getShortwaveSignalBars(): string {
-  const distanceKhz = Math.abs(getShortwaveEffectiveFrequencyMhz() - getShortwaveTargetFrequencyMhz()) * 1000;
-  const litBars = Math.max(1, 6 - Math.floor(distanceKhz / 8));
+  const reading = getClosestShortwaveSignal();
+  const litBars = reading.locked ? 6 : Math.max(1, Math.ceil(reading.strength * 6));
 
   return Array.from({ length: 6 }, (_, index) => `<span class="${index < litBars ? 'is-lit' : ''}"></span>`).join('');
+}
+
+function formatShortwaveLogTimestamp(): string {
+  const totalSeconds = 17 * 60 + Math.max(0, shortwaveLogSequence - 6) * 7;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `00:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function appendShortwaveLog(tone: ShortwaveLogTone, message: string): void {
+  shortwaveLogSequence += 1;
+  shortwaveLogEntries.push({
+    id: shortwaveLogSequence,
+    tone,
+    message: `${formatShortwaveLogTimestamp()} ${message}`,
+  });
+}
+
+function recordShortwaveReception(): void {
+  const reading = getClosestShortwaveSignal();
+  const frequency = formatShortwaveFrequency(shortwaveFrequencyMhz);
+  const phase = formatShortwavePhase(shortwavePhaseRad);
+  const signature = getShortwaveSyncSignature(reading.target);
+
+  if (reading.locked) {
+    if (shortwaveLastLockedTargetId !== reading.target.id) {
+      shortwaveLastLockedTargetId = reading.target.id;
+      appendShortwaveLog('lock', '帧同步完成，接收缓存稳定。');
+      appendShortwaveLog('lock', `中心频率 ${frequency} MHz / 相位校准 ${phase} rad / 同步签名 ${signature}。`);
+      appendShortwaveLog('success', `报告名称：${reading.target.reportName}`);
+      appendShortwaveLog('success', `密钥格式：${reading.target.keyFormat}`);
+      return;
+    }
+
+    appendShortwaveLog('lock', '帧同步保持，接收缓存稳定。');
+    return;
+  }
+
+  if (shortwaveLastLockedTargetId) {
+    appendShortwaveLog('scan', '帧同步丢失，接收器返回扫描状态。');
+    shortwaveLastLockedTargetId = '';
+  }
+
+  if (reading.strength >= 0.72) {
+    appendShortwaveLog('scan', '载波能量波动，解码缓存仍未形成有效帧。');
+    return;
+  }
+
+  if (reading.strength >= 0.38) {
+    appendShortwaveLog('scan', '宽带噪声中出现周期性起伏。');
+    return;
+  }
+
+  appendShortwaveLog('noise', '背景噪声微弱颤动，未发现稳定报告头。');
+}
+
+function renderHighlightedShortwaveMessage(message: string): string {
+  return escapeHtml(message)
+    .replace(/(RX-SIG-\d{4})/g, '<strong class="shortwave-token shortwave-token--key">$1</strong>')
+    .replace(/(REPORT_[A-Z0-9_]+\.enc)/g, '<strong class="shortwave-token shortwave-token--report">$1</strong>')
+    .replace(/(JANUS-0719-\{四位校验码\}|JANUS-0719-\d{4})/g, '<strong class="shortwave-token shortwave-token--key">$1</strong>')
+    .replace(/(\d+\.\d{3} MHz|\d+\.\d{3} rad)/g, '<span class="shortwave-token shortwave-token--value">$1</span>')
+    .replace(/(帧同步完成|帧同步保持|报告名称|密钥格式|同步签名|已解锁|接收缓存稳定)/g, '<strong class="shortwave-token shortwave-token--event">$1</strong>');
+}
+
+function renderShortwaveLogEntries(): string {
+  return shortwaveLogEntries
+    .map(
+      (entry) => `
+        <p class="shortwave-log-entry shortwave-log-entry--${entry.tone}">
+          ${renderHighlightedShortwaveMessage(entry.message)}
+        </p>
+      `,
+    )
+    .join('');
+}
+
+function renderShortwaveWaterfall(reading: ShortwaveSignalReading): string {
+  const strength = Number(reading.strength.toFixed(3));
+  const carrierStrength = Math.max(0, Math.min(1, (strength - 0.36) / 0.64));
+  const pulseStrength = carrierStrength * (0.35 + reading.phaseStrength * 0.65);
+  const detuneRatio = Math.max(-1, Math.min(1, reading.detuneKhz / reading.target.detectionRangeKhz));
+  const signalCenter = (shortwaveWaterfallColumns - 1) / 2 - detuneRatio * shortwaveWaterfallColumns * 0.42;
+  const carrierWidth = 0.58 + pulseStrength * 0.86;
+  const rowBurstPattern = [0.2, 0.58, 0.32, 0.92, 0.26, 0.74, 0.42, 0.86, 0.24];
+  const noisePattern = [0.16, 0.24, 0.13, 0.28, 0.19, 0.34, 0.12, 0.23, 0.31, 0.15, 0.26, 0.2];
+  const jitterSeed = Math.random();
+
+  const cells = Array.from({ length: shortwaveWaterfallRows }, (_, rowIndex) =>
+    Array.from({ length: shortwaveWaterfallColumns }, (_, columnIndex) => {
+      const rowJitter = getShortwaveWaterfallJitter(rowIndex, -1, jitterSeed);
+      const signalJitter = getShortwaveWaterfallJitter(rowIndex, columnIndex, jitterSeed);
+      const noiseJitter = getShortwaveWaterfallJitter(rowIndex + 11, columnIndex + 7, jitterSeed);
+      const burstJitter = getShortwaveWaterfallJitter(rowIndex + 23, columnIndex + 17, jitterSeed);
+      const timingJitter = getShortwaveWaterfallJitter(rowIndex + 37, columnIndex + 29, jitterSeed);
+      const rowOffset = (rowJitter - 0.5) * (0.18 + pulseStrength * 0.28);
+      const columnDistance = Math.abs(columnIndex - signalCenter - rowOffset);
+      const carrier = Math.max(0, 1 - columnDistance / carrierWidth) * pulseStrength;
+      const sidebandDistance = Math.abs(columnDistance - 2.2);
+      const sideband = Math.max(0, 1 - sidebandDistance / 0.86) * pulseStrength * 0.34;
+      const rowBurst = Math.max(
+        0.08,
+        Math.min(1, rowBurstPattern[(rowIndex + shortwaveLogSequence) % rowBurstPattern.length] + (burstJitter - 0.5) * 0.26),
+      );
+      const dropout = signalJitter < 0.09 ? 0.36 + signalJitter * 4 : 0.78 + signalJitter * 0.42;
+      const signal = Math.max(carrier, sideband) * rowBurst * dropout;
+      const noise = noisePattern[(rowIndex * 5 + columnIndex * 3) % noisePattern.length] + strength * 0.04 + noiseJitter * 0.13;
+      const intensity = Math.max(noise, signal);
+      const isHot = signal > 0.56 + noiseJitter * 0.08;
+      const isCarrier = signal > 0.21 + burstJitter * 0.08;
+      const color = isHot ? '224, 255, 229' : isCarrier ? '83, 243, 138' : signal > 0.07 + signalJitter * 0.05 ? '114, 217, 255' : '43, 126, 104';
+      const alphaBase = isCarrier ? Math.min(0.96, 0.34 + intensity * 0.62) : Math.min(0.52, intensity);
+      const alpha = Math.max(0.06, Math.min(1, alphaBase + (signalJitter - 0.5) * 0.16));
+      const lowAlpha = Math.max(0.08, alpha - (isCarrier ? 0.2 : 0.08));
+      const highAlpha = Math.min(1, alpha + (isCarrier ? 0.22 : 0.1));
+      const duration = 0.24 + timingJitter * 0.52;
+      const delay = -(getShortwaveWaterfallJitter(rowIndex + 41, columnIndex + 5, jitterSeed) * 0.9);
+
+      return `
+        <span
+          class="${isCarrier ? 'is-carrier' : 'is-noise'}"
+          style="--cell-color: ${color}; --cell-alpha: ${alpha.toFixed(3)}; --cell-low-alpha: ${lowAlpha.toFixed(3)}; --cell-high-alpha: ${highAlpha.toFixed(3)}; --cell-duration: ${duration.toFixed(2)}s; --cell-delay: ${delay.toFixed(2)}s"
+        ></span>
+      `;
+    }).join(''),
+  ).join('');
+
+  return `
+    <div class="waterfall" style="--waterfall-columns: ${shortwaveWaterfallColumns}; --waterfall-rows: ${shortwaveWaterfallRows}" aria-hidden="true">
+      ${cells}
+    </div>
+  `;
 }
 
 function renderShortwaveTool(): string {
   const frequency = formatShortwaveFrequency(shortwaveFrequencyMhz);
   const knobAngle = getShortwaveKnobAngle();
-  const offset = formatShortwaveOffset(shortwaveOffsetKhz);
-  const effectiveFrequency = formatShortwaveFrequency(getShortwaveEffectiveFrequencyMhz());
-  const reportLocked = hasShortwaveReportLock();
-  const decodeBuffer = reportLocked
-    ? `00:16:02 carrier lock
-00:16:08 center ${frequency} MHz / offset ${offset} kHz
-00:16:19 REPORT_NAME: REPORT_NORTHLINE_061.enc
-00:16:31 KEY_FORMAT: JANUS-0719-{four-digit-checksum}
-00:16:44 unlock stage disabled in this recovery build`
-    : `00:16:02 scanning carrier
-00:16:08 apply project offset before decode
-00:16:19 voice fragment: 灯塔 / 二级透镜 / 061
-00:16:31 burst: 07 19 07 19
-00:16:44 noise floor rising
-00:17:00 no stable report header`;
+  const phase = formatShortwavePhase(shortwavePhaseRad);
+  const reading = getClosestShortwaveSignal();
+  const reportLocked = reading.locked;
+  const reportUnlocked = Boolean(reading.target.documentId && unlockedDocumentIds.has(reading.target.documentId));
+  const receiverState = reportUnlocked ? '已解锁' : reportLocked ? '同步' : reading.strength > 0.38 ? '载波' : '扫描';
+  const syncSignature = reportLocked ? getShortwaveSyncSignature(reading.target) : 'RX-SIG ----';
 
   return `
     <div class="shortwave-tuner">
-      <button class="tuning-knob" type="button" data-shortwave-knob style="--knob-angle: ${knobAngle}deg" aria-label="调频旋钮">
-        <span></span>
-      </button>
+      <div class="tuner-dial">
+        <button class="tuning-knob" type="button" data-shortwave-knob style="--knob-angle: ${knobAngle}deg" aria-label="中心频率旋钮">
+          <span></span>
+        </button>
+        <span>中心频率旋钮</span>
+      </div>
       <label class="frequency-input">
-        <span>CENTER / MHz</span>
+        <span>中心频率 / MHz</span>
         <input type="text" inputmode="decimal" value="${frequency}" data-shortwave-frequency aria-label="短波频率" />
       </label>
-      <div class="tuning-steps" aria-label="频率微调">
-        <button type="button" data-tune-step="-0.010">-10 kHz</button>
-        <button type="button" data-tune-step="0.010">+10 kHz</button>
-      </div>
-      <label class="offset-control">
-        <span>OFFSET / kHz</span>
-        <input type="range" min="${shortwaveOffsetMinKhz}" max="${shortwaveOffsetMaxKhz}" step="1" value="${shortwaveOffsetKhz}" data-shortwave-offset aria-label="频率偏移" />
+      <label class="phase-control">
+        <span>相位校准 / rad</span>
+        <div class="phase-control__row">
+          <input type="range" min="${shortwavePhaseMinRad}" max="${shortwavePhaseMaxRad}" step="0.001" value="${phase}" data-shortwave-phase aria-label="相位校准" />
+          <button type="button" data-phase-step="-${shortwavePhaseStepRad}" aria-label="相位减少 ${formatShortwavePhase(shortwavePhaseStepRad)}">-0.010</button>
+          <button type="button" data-phase-step="${shortwavePhaseStepRad}" aria-label="相位增加 ${formatShortwavePhase(shortwavePhaseStepRad)}">+0.010</button>
+        </div>
       </label>
-      <div class="offset-readout">
-        <span>effective</span>
-        <strong>${effectiveFrequency} MHz</strong>
-        <em>${offset} kHz</em>
-      </div>
-      <div class="offset-steps" aria-label="偏移微调">
-        <button type="button" data-offset-step="-1">-1 kHz</button>
-        <button type="button" data-offset-step="1">+1 kHz</button>
+      <div class="phase-readout">
+        <span>同步签名</span>
+        <strong>${syncSignature}</strong>
+        <input type="text" inputmode="decimal" value="${phase}" data-shortwave-phase-value aria-label="相位读数" />
       </div>
       <div class="receiver-state">
-        <span>MODE</span>
+        <span>模式</span>
         <strong>AM / NARROW</strong>
-        <em>${reportLocked ? 'LOCK' : 'SCAN'}</em>
+        <em>${receiverState}</em>
       </div>
     </div>
 
-    <div class="shortwave-signal">
+    <div class="shortwave-signal" style="--signal-haze-alpha: ${(0.02 + reading.strength * 0.08).toFixed(3)}">
       <div class="signal-meter" aria-label="信号强度">
         ${getShortwaveSignalBars()}
       </div>
@@ -1174,18 +1438,11 @@ function renderShortwaveTool(): string {
       </div>
     </div>
 
-    <pre class="utility-pre shortwave-buffer">${decodeBuffer}</pre>
-
-    <div class="waterfall" aria-hidden="true">
-      <span style="--level: 18%"></span>
-      <span style="--level: 42%"></span>
-      <span style="--level: 31%"></span>
-      <span style="--level: 76%"></span>
-      <span style="--level: 48%"></span>
-      <span style="--level: 63%"></span>
-      <span style="--level: 24%"></span>
-      <span style="--level: 54%"></span>
+    <div class="shortwave-buffer" data-shortwave-log role="log" aria-label="接收内容">
+      ${renderShortwaveLogEntries()}
     </div>
+
+    ${renderShortwaveWaterfall(reading)}
   `;
 }
 
@@ -1373,6 +1630,7 @@ function bindArchiveEvents(): void {
       selectedDirectoryId = directory.id;
       selectedDocumentId = '';
       fileSearchQuery = '';
+      documentUnlockError = '';
       showUsbNotice = false;
       render();
     });
@@ -1384,6 +1642,7 @@ function bindArchiveEvents(): void {
       if (directoryId) selectedDirectoryId = directoryId;
       selectedDocumentId = button.dataset.documentId ?? selectedDocumentId;
       fileSearchQuery = '';
+      documentUnlockError = '';
       render();
     });
   });
@@ -1394,14 +1653,49 @@ function bindArchiveEvents(): void {
     const formData = new FormData(fileSearchForm);
     fileSearchQuery = String(formData.get('fileSearch') ?? '').trim();
     selectedDocumentId = '';
+    documentUnlockError = '';
     render();
   });
 
   document.querySelectorAll<HTMLButtonElement>('[data-file-search-clear]').forEach((button) => {
     button.addEventListener('click', () => {
       fileSearchQuery = '';
+      documentUnlockError = '';
       render();
     });
+  });
+
+  const documentUnlockForm = document.querySelector<HTMLFormElement>('#documentUnlockForm');
+  documentUnlockForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const directory = getSelectedDirectory();
+    const document = directory ? getSelectedDocument(directory) : undefined;
+    if (!document?.unlock) return;
+
+    const formData = new FormData(documentUnlockForm);
+    const submittedKey = String(formData.get('documentKey') ?? '').trim().toUpperCase();
+    const expectedKey = document.unlock.key.toUpperCase();
+
+    if (submittedKey !== expectedKey) {
+      documentUnlockError = document.unlock.failureMessage;
+      render();
+      return;
+    }
+
+    unlockedDocumentIds.add(document.id);
+    documentUnlockError = '';
+
+    if (document.unlock.discoveredFlag && !profile.discoveredFlags.includes(document.unlock.discoveredFlag)) {
+      profile.discoveredFlags.push(document.unlock.discoveredFlag);
+    }
+
+    if (document.unlock.solvedPuzzleId && !profile.solvedPuzzles.includes(document.unlock.solvedPuzzleId)) {
+      profile.solvedPuzzles.push(document.unlock.solvedPuzzleId);
+    }
+
+    appendShortwaveLog('success', `报告状态：已解锁。${document.name}.${document.extension} 已登记到本次会话。`);
+    render();
   });
 
   document.querySelectorAll<HTMLButtonElement>('[data-file-id]').forEach((button) => {
@@ -1451,25 +1745,40 @@ function bindArchiveEvents(): void {
     });
   });
 
-  document.querySelectorAll<HTMLButtonElement>('[data-tune-step]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const step = Number.parseFloat(button.dataset.tuneStep ?? '0');
-      tuneShortwaveFrequency(shortwaveFrequencyMhz + step);
-      render();
-    });
-  });
-
-  document.querySelectorAll<HTMLButtonElement>('[data-offset-step]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const step = Number.parseFloat(button.dataset.offsetStep ?? '0');
-      tuneShortwaveOffset(shortwaveOffsetKhz + step);
-      render();
-    });
-  });
-
-  document.querySelectorAll<HTMLInputElement>('[data-shortwave-offset]').forEach((input) => {
+  document.querySelectorAll<HTMLInputElement>('[data-shortwave-phase]').forEach((input) => {
     input.addEventListener('change', () => {
-      tuneShortwaveOffset(Number.parseFloat(input.value));
+      tuneShortwavePhase(Number.parseFloat(input.value));
+      recordShortwaveReception();
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLInputElement>('[data-shortwave-phase-value]').forEach((input) => {
+    const commitPhase = () => {
+      const value = Number.parseFloat(input.value);
+      if (Number.isNaN(value)) {
+        input.value = formatShortwavePhase(shortwavePhaseRad);
+        return;
+      }
+
+      tuneShortwavePhase(value);
+      recordShortwaveReception();
+      render();
+    };
+
+    input.addEventListener('change', commitPhase);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      commitPhase();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-phase-step]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const step = Number.parseFloat(button.dataset.phaseStep ?? '0');
+      tuneShortwavePhase(shortwavePhaseRad + step);
+      recordShortwaveReception();
       render();
     });
   });
@@ -1483,6 +1792,7 @@ function bindArchiveEvents(): void {
       }
 
       tuneShortwaveFrequency(value);
+      recordShortwaveReception();
       render();
     };
 
@@ -1499,7 +1809,8 @@ function bindArchiveEvents(): void {
       'wheel',
       (event) => {
         event.preventDefault();
-        tuneShortwaveFrequency(shortwaveFrequencyMhz + (event.deltaY > 0 ? -0.01 : 0.01));
+        tuneShortwaveFrequency(shortwaveFrequencyMhz + (event.deltaY > 0 ? -0.001 : 0.001));
+        recordShortwaveReception();
         render();
       },
       { passive: false },
@@ -1520,13 +1831,14 @@ function bindArchiveEvents(): void {
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startX;
         if (Math.abs(deltaX) > 3) moved = true;
-        previewFrequency(startFrequency + deltaX * shortwaveDragSensitivityMhz);
+        previewFrequency(startFrequency + deltaX * shortwaveFrequencyDragSensitivityMhz);
       };
 
       const handlePointerUp = () => {
         document.removeEventListener('pointermove', handlePointerMove);
         document.removeEventListener('pointerup', handlePointerUp);
-        if (!moved) tuneShortwaveFrequency(startFrequency + 0.01);
+        if (!moved) tuneShortwaveFrequency(startFrequency + 0.001);
+        recordShortwaveReception();
         render();
       };
 
@@ -1548,6 +1860,13 @@ function bindArchiveEvents(): void {
       render();
     });
   });
+}
+
+function keepShortwaveLogAtLatest(): void {
+  const log = document.querySelector<HTMLElement>('[data-shortwave-log]');
+  if (!log) return;
+
+  log.scrollTop = log.scrollHeight;
 }
 
 function render(): void {
@@ -1600,6 +1919,7 @@ function render(): void {
   `;
 
   bindArchiveEvents();
+  keepShortwaveLogAtLatest();
 }
 
 startBootSequence();

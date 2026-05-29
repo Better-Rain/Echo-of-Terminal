@@ -1,131 +1,129 @@
-# AI Handoff
+# AI 交接说明
 
-This document is for quickly onboarding another AI assistant or a new development host.
+本文档用于新开发者或新的 AI 助手快速接手项目。内容包含实现状态和已知后续方向，会涉及当前原型流程，但不作为面向玩家的介绍文档。
 
-## Project
+## 项目概况
 
-- Name: Echo of Terminal / 黑箱档案局 prototype.
-- Type: pure frontend web puzzle game.
-- Stack: Vite + TypeScript + plain CSS.
-- Deployment target: GitHub Pages.
-- Repository: `git@github.com:Better-Rain/Echo-of-Terminal.git`
-- Local workspace examples used so far: `D:\programme\Vscode Projects\web_puzzle_game`, `E:\Programs\Vscode Projects\web_puzzle_game`
+- 项目名称：Echo of Terminal / 黑箱档案局。
+- 项目类型：纯前端网页解密游戏原型。
+- 技术栈：Vite + TypeScript + 原生 CSS。
+- 发布目标：GitHub Pages。
+- 仓库地址：`git@github.com:Better-Rain/Echo-of-Terminal.git`
+- 当前工作目录示例：`C:\Code\Vscode Projects\web_puzzle\Echo-of-Terminal`
 
-## How To Run
+## 运行方式
 
 ```powershell
 npm install
 npm run dev
 ```
 
-The dev server normally opens at `http://127.0.0.1:5173/`.
+开发服务器通常运行在 `http://127.0.0.1:5173/`。
 
-Build check:
+构建检查：
 
 ```powershell
 npm run build
 ```
 
-## Publishing
+## 发布方式
 
-The repo contains `.github/workflows/deploy-pages.yml`.
+仓库包含 `.github/workflows/deploy-pages.yml`。
 
-After pushing to GitHub:
+推送到 GitHub 后：
 
-1. Open repository Settings -> Pages.
-2. Select GitHub Actions as the Pages source.
-3. Push `main`; the workflow builds `dist/` and deploys it.
+1. 在仓库 Settings -> Pages 中选择 GitHub Actions 作为发布来源。
+2. 推送 `main` 分支。
+3. 工作流会构建 `dist/` 并部署到 GitHub Pages。
 
-`vite.config.ts` uses `base: './'`, so the app can be served from a GitHub Pages project path without hardcoding the repository name.
+`vite.config.ts` 使用 `base: './'`，因此项目页路径不需要提前写死仓库名。
 
-## Progress Snapshot
+## 当前进度快照
 
-Last updated: 2026-05-28.
+最后更新：2026-05-30。
 
-- GitHub SSH remote is configured and `main` has been pushed to `git@github.com:Better-Rain/Echo-of-Terminal.git`.
-- First-stage login flow is playable: boot self-check -> readonly `访客#0719` login -> placeholder password `0719` -> auth feedback -> archive shell.
-- Second-stage entry now has a staged mount sequence: file manager scan -> delayed local disk mount -> delayed external media mount.
-- Switching a volume or directory only changes the directory view; documents open only after the player clicks a file row.
-- Local disk is now a small directory tree (`SYSTEM`, `COMMUNICATIONS`, `RECORDS`, `USERS`, `TEMP`) with one current-session log and several past time-window damaged logs under `SYSTEM/LOGS/`.
-- File and directory rows intentionally show only names plus compact counts/sizes, without explanatory subtitle text.
-- The `档案记录` workspace is now a fixed archive workspace: the archive index stays open, the active record stays in the center, and the right side is a shared auxiliary-software area.
-- The right-side auxiliary area uses browser-like tabs and shows one tool at a time: `secure-comm`, `rx-shortwave`, or `clockctl`.
-- `secure-comm` is a narrow-app flow, not a split pane: it opens to a multi-contact communication list, enters one conversation after a thread click, and has a back control to return to the list.
-- `secure-comm` now has direct contacts plus a group relay, compact avatar message bubbles, right-aligned player messages, left-aligned contact messages, and a contact record page reachable from avatars.
-- Auxiliary tools render directly inside the shared `utility-window`; avoid reintroducing nested window shells such as `comm-window` inside app-specific wrappers.
-- `rx-shortwave` currently uses a simplified receiver face with a draggable/wheelable tuning knob, editable frequency field, +/-10 kHz controls, signal meter, decode buffer, and waterfall display.
-- The external media notice intentionally reads like an old operating system removable-drive prompt and does not reveal story metadata such as priority or document purpose. It slides in when external media is mounted.
-- During the delay between local disk mount and external media mount, the storage tree shows a short movable-media scan/progress status instead of an idle external-interface placeholder.
-- USB root currently contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission letter with a European-style ministry header, mission scope, evidence-handling rules, and sign-off.
-- A loose second-stage receiver puzzle scaffold now exists in the file manager: `RECORDS/readme.txt` -> `RECORDS/signal_log_061.txt` -> search `offset` -> `SYSTEM/INDEX/offset_jan.txt` -> tune `rx-shortwave`.
-- The receiver now has a center frequency control plus a kHz offset control. The current scaffold target is center `6.107 MHz` plus `+042 kHz`; lock output reveals `REPORT_NORTHLINE_061.enc` and key format `JANUS-0719-{four-digit-checksum}` only.
-- File manager search is generic and searches mounted document names, paths, classifications, tags, and body text. It currently does not implement report search/unlock logic.
-- The right-side document body layout was corrected so large desktop viewports no longer stretch paragraphs across the full panel height.
-- Current verification command: `npm run build`.
+- GitHub SSH 远端已配置，`main` 已推送到 `git@github.com:Better-Rain/Echo-of-Terminal.git`。
+- 第一阶段登录流程可玩：启动自检 -> 只读账号 `访客#0719` -> 口令 `0719` -> 身份验证反馈 -> 档案终端。
+- 第二阶段入口有分段挂载流程：文件管理器扫描 -> 延迟挂载本地磁盘 -> 延迟挂载外接介质。
+- 切换存储卷或目录只改变目录视图；文档必须由玩家主动点击打开。
+- 本地磁盘包含 `SYSTEM`、`COMMUNICATIONS`、`RECORDS`、`USERS`、`TEMP` 等目录，当前会话日志和损坏历史日志位于 `SYSTEM/LOGS/`。
+- 文件和目录行只显示名称与紧凑计数/大小，不添加解释性副标题。
+- `档案记录` 是固定三栏工作区：左侧档案索引常驻，中间为当前档案，右侧为辅助软件共享区。
+- 右侧辅助软件使用类似浏览器的标签页，一次只显示 `secure-comm`、`rx-shortwave` 或 `clockctl`。
+- `secure-comm` 是窄屏应用流程：先显示通信列表，点击会话进入单独聊天，可返回列表；头像可打开联系人记录页。
+- 辅助工具直接渲染在共享 `utility-window` 内，不要重新引入嵌套窗口壳。
+- `rx-shortwave` 已形成完整第二阶段谜题链路：线索文件 -> 相位校准表 -> 接收器锁定 -> 搜索加密报告 -> 输入密钥 -> 解锁报告。
+- 短波目标为中心频率 `6.107 MHz` 和相位校准 `1.319 rad`；二者分别用于载波捕获和帧同步，不再合成为单一读数。
+- 短波控件职责已收束为两项：中心频率组负责输入或旋转到 MHz 读数，相位校准滑杆负责按相位表设置 rad 读数。
+- 短波接收日志只在帧同步后输出报告名和密钥格式；未同步时只显示接收器内部状态，不显示距离、方向或倾向性提示。
+- 水瀑图使用可复用目标读数机制：远离目标时仅低幅背景噪声，靠近任一目标时出现更明显的竖向脉冲，不使用左右摇动或外发光。
+- 接收器锁定输出报告名称 `REPORT_NORTHLINE_061.enc` 和密钥格式 `JANUS-0719-{四位校验码}`。
+- 加密报告位于 `DISK://LOCAL/RECORDS/REPORTS/REPORT_NORTHLINE_061.enc`，完整密钥为 `JANUS-0719-6149`。
+- 解锁报告会向当前 `PlayerProfile` 写入 `report.northline-061` 和 `shortwave.report-061`，但刷新后不持久化。
+- 文件管理器搜索会检索已挂载文档的名称、路径、分级、标签和当前可见正文。加密文档未解锁前只检索锁定提示正文，不检索隐藏正文。
+- U 盘根目录包含 `委托书_文化部_优先级A+.txt`，用于交代文化部委托、只读整理、时间异常处理原则和原账号主人未核准的信息。
+- 右侧文档正文布局已修正，桌面宽屏下不会把段落拉伸到整块面板高度。
+- 当前验证命令：`npm run build`。
 
-## Current Player Flow
+## 当前玩家流程
 
-1. Boot screen plays a short system self-check.
-2. Login page appears with readonly username `访客#0719`.
-3. Current placeholder password is `0719`, derived from the username suffix.
-4. Successful auth shows readonly access notices.
-5. App enters the file manager workspace.
-6. The file manager first shows a short mount scan; local disk appears after a brief delay.
-7. After a second delay, the external media appears to simulate the protagonist inserting the storage device, and a bottom-right OS-like removable-drive prompt appears.
-8. Clicking the notice opens the USB root directory.
-9. USB contains `委托书_文化部_优先级A+.txt`, a cleartext Ministry of Culture commission document with a European-style ministry header and sign-off; the document is not opened automatically.
-10. Local disk contains the current login log plus past damaged log windows in `DISK://LOCAL/SYSTEM/LOGS/`.
-11. Local `RECORDS/readme.txt` points players toward `rx-shortwave`; `signal_log_061.txt` gives center frequency, project code, and `offset_jan.txt` as the offset-table hint.
-12. Searching `offset` in the file manager finds `SYSTEM/INDEX/offset_jan.txt`, which contains project-code offset rows.
-13. Top navigation switches between `文件管理器` and `档案记录`.
-14. `档案记录` opens the archive workspace; the archive index stays visible while right-side tabs switch between communication software, shortwave receiver, and clock.
-15. The communication software first shows the communication list; clicking a thread enters the single conversation view, and `返回` returns to the list.
-16. Clicking a contact or group avatar opens its contact record page; the page can return to the previous communication view or open the conversation.
-17. The shortwave receiver frequency can be adjusted through the knob, mouse wheel, +/-10 kHz controls, editable MHz field, kHz offset slider, and +/-1 kHz offset controls.
+1. 启动页播放短暂系统自检。
+2. 登录页出现，只读用户名为 `访客#0719`。
+3. 当前占位口令为 `0719`，来自用户名后四位。
+4. 验证成功后显示只读权限提示。
+5. 应用进入文件管理器工作区。
+6. 文件管理器先显示挂载扫描，本地磁盘稍后出现。
+7. 外接介质随后出现，右下角显示旧操作系统风格的可移动磁盘提示。
+8. 点击提示可打开 U 盘根目录。
+9. U 盘包含 `委托书_文化部_优先级A+.txt`，该文档不会自动打开。
+10. 本地磁盘包含当前登录日志和历史损坏日志，集中在 `DISK://LOCAL/SYSTEM/LOGS/`。
+11. 本地 `RECORDS/readme.txt` 指向 `rx-shortwave`；`signal_log_061.txt` 给出中心频率、项目代号和 `phase_jan.txt` 相位表线索。
+12. 在文件管理器搜索 `phase` 可找到 `SYSTEM/INDEX/phase_jan.txt`。
+13. 相位表中 `JANUS` 对应 `1.319 rad`。
+14. 顶部导航可在 `文件管理器` 和 `档案记录` 之间切换。
+15. `档案记录` 打开档案工作区，右侧标签可切换通信软件、短波接收器和时钟。
+16. 在短波接收器中设置中心频率 `6.107 MHz`，将相位校准调到 `1.319 rad`。
+17. 接收器锁定后显示 `REPORT_NORTHLINE_061.enc` 和密钥格式。
+18. 回到文件管理器搜索 `REPORT_NORTHLINE_061`，打开加密报告。
+19. 用同步签名 `RX-SIG-6149` 生成校验码 `6149`，提交密钥 `JANUS-0719-6149`。
+20. 报告解锁后显示北线镜像报告正文，并标记本次短波谜题完成。
 
-## Current Structure
+## 当前代码结构
 
-- `src/main.ts`: state machine and UI rendering. Current stages are `boot`, `login`, `authenticating`, and `archive`; `activeUtilityAppId` controls the right-side auxiliary software tab under `档案记录`.
-- `src/styles.css`: all current visual styling, including terminal layout, scrollbars, file manager, archive workspace, auxiliary software tabs, record panels, login screens, and USB notice.
-- `src/domain/types.ts`: shared data types for access rules, cases, chat, login, and virtual filesystem. `VirtualDirectory` supports child directories via `directoryIds`.
-- `src/domain/access.ts`: access-rule evaluator, independent from UI.
-- `src/data/loginStage.ts`: first-stage login puzzle content.
-- `src/data/fileSystem.ts`: second-stage virtual volumes, directories, and documents.
-- `src/data/cases.ts`: example archive records.
-- `src/data/chats.ts`: example secure chat contacts, group relay, contact metadata, avatars, and message history.
-- `src/data/player.ts`: current player profile. Default is readonly guest account `访客#0719`.
-- `src/data/access.ts`: role definitions and permissions.
-- `public/assets/bureau-seal.svg`: current local visual identity asset.
+- `src/main.ts`：状态机和界面渲染。当前阶段包括 `boot`、`login`、`authenticating`、`archive`；`activeUtilityAppId` 控制档案工作区右侧辅助软件标签；`unlockedDocumentIds` 管理本次会话内的加密文档解锁状态。
+- `src/styles.css`：视觉样式，包括终端布局、滚动条、文件管理器、档案工作区、辅助软件标签、文档解锁表单、登录界面和 U 盘通知。
+- `src/domain/types.ts`：访问规则、档案、通信、登录、虚拟文件系统等共享类型；`VirtualDocument.unlock` 用于配置加密文档。
+- `src/domain/access.ts`：访问规则判定，独立于界面层。
+- `src/data/loginStage.ts`：第一阶段登录谜题内容。
+- `src/data/fileSystem.ts`：第二阶段虚拟存储卷、目录和文档，包括短波加密报告。
+- `src/data/cases.ts`：示例档案记录。
+- `src/data/chats.ts`：示例通信联系人、群组、联系人元数据、头像和消息历史。
+- `src/data/player.ts`：当前玩家档案。默认是只读访客账号 `访客#0719`。
+- `src/data/access.ts`：角色定义和权限能力。
+- `public/assets/bureau-seal.svg`：当前本地视觉标识资产。
 
-## Design Direction
+## 设计方向
 
-- Style: internal archive terminal, dark background, restrained green/cyan/amber accents.
-- Avoid gamey copy in the main UI. Prefer system-like labels: record, access rule, internal note, readonly mirror, storage media.
-- Keep page-level scrolling off where possible; scrolling should happen inside panels.
-- Current scrollbars are intentionally narrow and terminal-styled.
-- The UI should remain data-driven; puzzle text should live in `src/data/*` rather than directly inside rendering logic when practical.
+- 风格：内部档案终端，深色背景，克制使用绿色、青色和琥珀色强调。
+- 主界面避免游戏化讲解，优先使用系统式标签，例如记录、访问规则、内部备注、只读镜像、存储介质。
+- 尽量避免页面级滚动；滚动应发生在具体面板内部。
+- 当前滚动条为窄条终端风格。
+- 界面应保持数据驱动。谜题文本优先放在 `src/data/*`，不要直接写死在渲染函数里。
+- 文档类内容默认使用中文；必要的程序名、文件名、项目代号、密钥和命令名可保留原文。
 
-## Known Placeholder Content
+## 已知占位内容
 
-- Login puzzle is intentionally simple and can be replaced later.
-- Avatar/original account owner image is still a placeholder.
-- File manager currently has one delayed USB commission document plus a local disk directory tree with one current login log and several damaged historical log windows.
-- Archive records, shortwave data, clock data, and chat are sample content, not final story canon.
+- 登录谜题仍然很简单，后续可替换。
+- 账号原主人头像仍是占位。
+- 档案记录、通信内容和时钟内容仍是样例，不是最终剧情正典。
+- `clockctl` 仍是占位工具，后续可接入时间校准或纪年换算谜题。
+- 玩家进度没有持久化；刷新后报告解锁状态会丢失。
 
-## Useful Git Checkpoints
+## 后续建议
 
-- `70b5afc Add file manager and USB brief flow`
-- `c47e288 Refine archive scrollbars and file row layout`
-- `baf5755 Tighten archive viewport and system labels`
-- `efcb12c Add terminal login puzzle stage`
-- `4578cbc Separate content data and access model`
-
-## Next Likely Work
-
-- Iterate the second-stage receiver puzzle text, target values, and report/key wording after playtesting.
-- Add the later report-name search and key-gated document unlock once the final unlock design is decided.
-- Expand the USB directory tree beyond the current commission document.
-- Decide which auxiliary tools are puzzle-bearing and move tool content into `src/data/*` once the first puzzle flow is defined.
-- Decide the original account owner's identity and avatar treatment.
-- Connect file-manager discoveries to access flags in `PlayerProfile`.
-- Add lightweight persistence for discovered files and unlocked records.
+- 将短波目标频率、相位校准、报告名和密钥规则移入独立数据文件，减少 `src/main.ts` 中的谜题硬编码。
+- 让 `shortwave.report-061` 或 `report.northline-061` 驱动后续档案权限，例如开放 B-04 或 C-61 的新字段。
+- 扩展 U 盘目录，不只保留委托书，可加入术语表、现场目录、异常日期说明等。
+- 决定哪些辅助工具会承载谜题，并逐步将工具内容迁移到 `src/data/*`。
+- 决定原账号主人身份和头像处理。
+- 增加轻量持久化，记录已打开文件、已发现线索和已解锁文档。

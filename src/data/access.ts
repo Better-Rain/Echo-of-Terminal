@@ -3,11 +3,11 @@ import type { RoleDefinition } from '../domain/types';
 export const roleDefinitions: RoleDefinition[] = [
   {
     id: 'guest',
-    name: '只读访客',
-    shortName: 'GUEST',
+    name: '只读镜像',
+    shortName: 'MIRROR',
     clearanceCap: 2,
     permissions: ['case:read', 'case:read-redacted', 'chat:read', 'hint:view'],
-    description: '可阅读基础档案和通信记录，但不能写入、解锁或修改任何字段。',
+    description: '由旧系统核心席位降级生成的只读访问身份，可阅读基础档案和通信记录，但不能写入、解锁或修改任何字段。',
   },
   {
     id: 'trainee',

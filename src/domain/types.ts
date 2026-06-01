@@ -58,6 +58,7 @@ export type PlayerProfile = {
 };
 
 export type FileReviewStatus = 'new' | 'open' | 'solved' | 'sealed';
+export type CasePresentation = 'plain' | 'article' | 'log' | 'form' | 'transcript' | 'table';
 
 export type CaseFragment = {
   id: string;
@@ -67,18 +68,27 @@ export type CaseFragment = {
   redactedText?: string;
 };
 
+export type CaseTable = {
+  columns: string[];
+  rows: string[][];
+  note?: string;
+};
+
 export type CaseFile = {
   id: string;
+  sourceDocumentId: string;
   code: string;
   title: string;
   unit: string;
   date: string;
   reviewStatus: FileReviewStatus;
+  presentation: CasePresentation;
   classification: string;
   access: AccessRule;
   teaser: string;
   summary: string;
   fragments: CaseFragment[];
+  table?: CaseTable;
   internalNote: string;
   linkedThreadIds: string[];
   puzzleIds: string[];
@@ -116,6 +126,8 @@ export type TerminalLine = {
   tag: string;
   text: string;
   tone?: TerminalTone;
+  updates?: string[];
+  delayMs?: number;
 };
 
 export type LoginStageConfig = {
@@ -162,6 +174,12 @@ export type VirtualDocument = {
   directoryId: string;
   name: string;
   extension: string;
+  archiveCaseId?: string;
+  hidden?: {
+    discoveredFlag: string;
+    keywords: string[];
+    revealMessage?: string;
+  };
   modified: string;
   sizeLabel: string;
   classification: string;

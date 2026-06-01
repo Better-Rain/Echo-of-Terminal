@@ -1,4 +1,28 @@
-import type { ChatThread } from '../domain/types';
+import type { ChatMessage, ChatThread } from '../domain/types';
+
+export const delayedChatDelivery = {
+  delayMs: 7200,
+  threadId: 'shen-dewen',
+  noticeTitle: '未投递消息已恢复',
+  noticeBody: '沈德文曾发送给中枢席位原持有人的旧消息刚刚进入本地通信镜像。',
+  messages: [
+    {
+      id: 'shen-delayed-system',
+      from: 'system',
+      speaker: '未投递队列',
+      text: '本地通信缓存恢复一条旧消息。目标席位在原投递窗口后未再次登录，消息未被原持有人读取。',
+      time: '00:19',
+    },
+    {
+      id: 'shen-delayed-signal-index',
+      from: 'contact',
+      speaker: '沈德文',
+      avatar: '沈',
+      text: '0719，如果你还能进本地记录区，先找 RECORDS 下面的 signal_index_061.arc。那不是报告，是接收索引。报告名不要靠猜，索引会告诉你从哪里开始听。',
+      time: '1907-07-19 00:12',
+    },
+  ] satisfies ChatMessage[],
+};
 
 export const chatThreads: ChatThread[] = [
   {
@@ -33,7 +57,7 @@ export const chatThreads: ChatThread[] = [
       {
         id: 'operator-sd',
         from: 'operator',
-        speaker: '访客#0719',
+        speaker: '中枢席位#0719',
         avatar: '07',
         text: 'S.D. 是谁？',
         time: '00:04',
@@ -94,7 +118,7 @@ export const chatThreads: ChatThread[] = [
       {
         id: 'operator-ask-shen',
         from: 'operator',
-        speaker: '访客#0719',
+        speaker: '中枢席位#0719',
         avatar: '07',
         text: '你说的回声来自灯塔？',
         time: '23:14',
@@ -126,7 +150,7 @@ export const chatThreads: ChatThread[] = [
     channel: 'GROUP RELAY / NORTH-LINE',
     subtitle: '5 名成员 / 只读群聊',
     detail: '北线遗迹现场的临时工作组镜像。成员身份不完全可信，部分发言来自损坏缓存。',
-    members: ['值守员梁', '档案员周', '沈德文', '文化部联络员', '访客#0719'],
+    members: ['值守员梁', '档案员周', '沈德文', '文化部联络员', '中枢席位#0719'],
     access: {
       minClearance: 1,
       permissions: ['chat:read'],
@@ -151,7 +175,7 @@ export const chatThreads: ChatThread[] = [
       {
         id: 'north-03',
         from: 'operator',
-        speaker: '访客#0719',
+        speaker: '中枢席位#0719',
         avatar: '07',
         text: '备用钥匙箱编号能确认吗？',
         time: '18:51',
@@ -206,9 +230,9 @@ export const chatThreads: ChatThread[] = [
       {
         id: 'operator-ministry',
         from: 'operator',
-        speaker: '访客#0719',
+        speaker: '中枢席位#0719',
         avatar: '07',
-        text: '只读账号是否足够访问全部档案？',
+        text: '只读镜像是否足够访问全部档案？',
         time: '03:18',
       },
       {

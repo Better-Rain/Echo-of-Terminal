@@ -2,12 +2,162 @@ import type { CaseFile } from '../domain/types';
 
 export const caseFiles: CaseFile[] = [
   {
+    id: 'rx-index',
+    sourceDocumentId: 'receiver-signal-index',
+    code: 'RX-061',
+    title: '短波接收索引',
+    unit: '接收记录 / 本地镜像',
+    date: '1907-07-18',
+    reviewStatus: 'open',
+    presentation: 'plain',
+    classification: 'L2 / SIGNAL',
+    access: {
+      minClearance: 2,
+      permissions: ['case:read'],
+    },
+    teaser: '本地记录区中的接收索引，说明后续内容需要通过短波接收器读取。',
+    summary:
+      '这批记录不是普通档案正文，而是旧通信设备旁路抄下来的接收索引。索引提示接入者先查看同目录中的信号日志，再使用档案记录工作区右侧的 rx-shortwave 接收器读取后续报告。',
+    fragments: [
+      {
+        id: 'rx-index-source',
+        label: '记录性质',
+        body: '这批记录不是普通档案正文，而是从旧通信设备旁路抄下来的接收索引。',
+      },
+      {
+        id: 'rx-index-tool',
+        label: '读取工具',
+        body: '真正的内容要用档案记录工作区右侧的 rx-shortwave 接收器读取。',
+      },
+      {
+        id: 'rx-index-log',
+        label: '下一步',
+        body: '先解析同目录中的 signal_log_061.arc。日志会给出中心频率、项目代号，以及用于查找相位偏移表的文件名线索。',
+      },
+      {
+        id: 'rx-index-phase',
+        label: '校准要求',
+        body: '如果只得到一个中心频率，接收器只能捕获载波，无法稳定解调。还需要按项目代号在相位偏移表中查到对应的 rad 数值。',
+      },
+      {
+        id: 'rx-index-output',
+        label: '预期输出',
+        body: '接收器锁定后会给出报告名称和密钥格式。用报告名称回到文件管理器搜索，再提交完整密钥。',
+      },
+    ],
+    internalNote: '第二阶段入口档案：文件管理器仅显示 signal_index_061.arc 的源数据，明文说明由档案记录解析生成。',
+    linkedThreadIds: [],
+    puzzleIds: ['puzzle-shortwave-entry'],
+    tags: ['短波', '接收器', 'signal_index', '第二阶段'],
+  },
+  {
+    id: 'rx-signal-log',
+    sourceDocumentId: 'signal-log-061',
+    code: 'RX-061-LOG',
+    title: '短波接收日志',
+    unit: '接收记录 / 旁路缓存',
+    date: '1907-07-18',
+    reviewStatus: 'open',
+    presentation: 'form',
+    classification: 'L2 / SIGNAL',
+    access: {
+      minClearance: 2,
+      permissions: ['case:read'],
+    },
+    teaser: '一段短波接收窗口记录，给出载波捕获需要的中心频率和项目代号。',
+    summary:
+      '该日志记录了 RX-061 接收窗口的基本参数。中心频率负责捕获载波，项目代号用于在相位偏移表中查找对应的解调校准值。',
+    fragments: [
+      {
+        id: 'rx-log-window',
+        label: '接收窗口',
+        body: '1907-07-18 18:40-19:12。',
+      },
+      {
+        id: 'rx-log-frequency',
+        label: '中心频率',
+        body: '6.107 MHz。',
+      },
+      {
+        id: 'rx-log-project',
+        label: '项目代号',
+        body: 'JANUS。',
+      },
+      {
+        id: 'rx-log-channel',
+        label: '信道备注',
+        body: '载波在 07:19 标记附近重复；语音片段提到“灯塔二级透镜”。',
+      },
+      {
+        id: 'rx-log-phase',
+        label: '相位表线索',
+        body: 'phase_jan.arc。',
+      },
+      {
+        id: 'rx-log-operation',
+        label: '操作备注',
+        body: '用中心频率捕获载波，再用项目代号查相位偏移表，完成 rx-shortwave 的帧同步。',
+      },
+    ],
+    internalNote: '短波第二阶段参数日志：文件管理器仅显示 signal_log_061.arc 源数据，清晰字段由档案记录解析生成。',
+    linkedThreadIds: [],
+    puzzleIds: ['puzzle-shortwave-entry'],
+    tags: ['中心频率', '信号日志', 'JANUS', '短波'],
+  },
+  {
+    id: 'rx-phase-table',
+    sourceDocumentId: 'phase-jan-table',
+    code: 'RX-PHASE-JAN',
+    title: '一月载波相位偏移表',
+    unit: '索引记录 / 相位校准',
+    date: '1907-01-31',
+    reviewStatus: 'open',
+    presentation: 'table',
+    classification: 'L2 / SIGNAL',
+    access: {
+      minClearance: 2,
+      permissions: ['case:read'],
+    },
+    teaser: '一张按项目代号登记的相位偏移表，用于把已捕获载波调整到可解调状态。',
+    summary:
+      '该表记录一月短波载波的相位偏移值。玩家需要先从信号日志确认项目代号，再在表格中读取对应 rad 数值。',
+    fragments: [
+      {
+        id: 'rx-phase-usage',
+        label: '使用方式',
+        body: '中心频率用于捕获载波；相位偏移用于解调帧同步。单位统一为 rad。',
+      },
+      {
+        id: 'rx-phase-rule',
+        label: '判读原则',
+        body: '若出现多个项目别名，以信号日志中的精确项目代号为准。',
+      },
+    ],
+    table: {
+      columns: ['项目代号', '相位偏移(rad)', '备注'],
+      rows: [
+        ['AURORA', '5.927', '存储交接信标'],
+        ['JANUS', '1.319', '北线镜像报告'],
+        ['SABLE', '0.742', '安全联系人测试'],
+        ['MERCURY', '4.188', '授时服务丢弃信道'],
+        ['CALDER', '2.604', '1907-07-17 后停用'],
+      ],
+      note: '按信号日志中的项目代号查找对应行，再把相位偏移值输入 rx-shortwave 的相位校准器。',
+    },
+    internalNote: '相位偏移表：文件管理器仅显示 phase_jan.arc 源数据，档案记录用表格显示解析结果。',
+    linkedThreadIds: [],
+    puzzleIds: ['puzzle-shortwave-entry'],
+    tags: ['相位', '相位偏移', 'JANUS', 'phase', '短波'],
+  },
+  {
     id: 'a17',
+    sourceDocumentId: 'case-source-a17',
     code: 'A-17',
     title: '失联观测站',
     unit: '外勤记录 / 北线',
     date: '1997-11-03',
     reviewStatus: 'open',
+    presentation: 'log',
     classification: 'L2 / FIELD',
     access: {
       minClearance: 2,
@@ -40,11 +190,13 @@ export const caseFiles: CaseFile[] = [
   },
   {
     id: 'b04',
+    sourceDocumentId: 'case-source-b04',
     code: 'B-04',
     title: '匿名信件批次',
     unit: '文档复核 / 城区',
     date: '2002-04-18',
     reviewStatus: 'sealed',
+    presentation: 'article',
     classification: 'L3 / ARCHIVE',
     access: {
       minClearance: 3,
@@ -81,11 +233,13 @@ export const caseFiles: CaseFile[] = [
   },
   {
     id: 'c61',
+    sourceDocumentId: 'case-source-c61',
     code: 'C-61',
     title: '灯塔维修单',
     unit: '资产维护 / 海岸',
     date: '1988-09-21',
     reviewStatus: 'open',
+    presentation: 'form',
     classification: 'L2 / SIGNAL',
     access: {
       minClearance: 2,
@@ -123,11 +277,13 @@ export const caseFiles: CaseFile[] = [
   },
   {
     id: 'd12',
+    sourceDocumentId: 'case-source-d12',
     code: 'D-12',
     title: '内部通话节录',
     unit: '监听转写 / 未核验',
     date: '2010-06-09',
     reviewStatus: 'solved',
+    presentation: 'transcript',
     classification: 'L1 / TRAINING',
     access: {
       minClearance: 1,
@@ -158,5 +314,44 @@ export const caseFiles: CaseFile[] = [
     linkedThreadIds: [],
     puzzleIds: ['tutorial-key'],
     tags: ['教学', '钥匙', '训练'],
+  },
+  {
+    id: 'h19',
+    sourceDocumentId: 'case-source-h19',
+    code: 'H-19',
+    title: '核心席位残留索引',
+    unit: '隐藏索引 / 本地镜像',
+    date: '1907-07-19',
+    reviewStatus: 'new',
+    presentation: 'article',
+    classification: 'L2 / HIDDEN INDEX',
+    access: {
+      minClearance: 2,
+      permissions: ['case:read'],
+    },
+    teaser: '一条不在常规目录枚举中的残留索引，指向核心席位 0719 的旧访问痕迹。',
+    summary:
+      '这条索引不是权限提升记录，而是一次只读镜像重建结果。它说明某些文件不会进入普通目录枚举，只有搜索命中特定词条后才会恢复登记。',
+    fragments: [
+      {
+        id: 'h19-origin',
+        label: '恢复方式',
+        body: '索引片段由北线报告中的线索组触发恢复。恢复动作只登记文件存在，不改变当前席位权限。',
+      },
+      {
+        id: 'h19-seat',
+        label: '席位痕迹',
+        body: '核心席位 0719 在时钟失效前后触达过 C-61 与 B-04，但镜像仍无法证明当前接入者等同于原持有人。',
+      },
+      {
+        id: 'h19-note',
+        label: '系统备注',
+        body: '若后续线索要求查找隐藏条目，应优先使用已确认的专名、异常短语或报告中重复出现的组合词，而不是遍历所有目录。',
+      },
+    ],
+    internalNote: '隐藏文档示例：搜索“灯塔二级透镜”“二级透镜”或“07:19 重复登录”后，源文件与本档案才会进入可见索引。',
+    linkedThreadIds: ['shen-dewen'],
+    puzzleIds: ['puzzle-hidden-document-search'],
+    tags: ['隐藏索引', '核心席位', '0719', '灯塔二级透镜'],
   },
 ];

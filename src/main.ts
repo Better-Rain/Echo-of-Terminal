@@ -1,7 +1,7 @@
 import './styles.css';
 import { roleDefinitions } from './data/access';
 import { caseFiles } from './data/cases';
-import { chatThreads } from './data/chats';
+import { chatThreads, delayedChatDelivery } from './data/chats';
 import { virtualDirectories, virtualDocuments, virtualVolumes } from './data/fileSystem';
 import { loginStage } from './data/loginStage';
 import { currentProfile } from './data/player';
@@ -51,6 +51,11 @@ type ShortwaveLogEntry = {
   message: string;
 };
 
+type ShortwaveReceptionMessage = {
+  tone: ShortwaveLogTone;
+  message: string;
+};
+
 type ShortwaveSignalTarget = {
   id: string;
   label: string;
@@ -63,6 +68,10 @@ type ShortwaveSignalTarget = {
   reportName: string;
   keyFormat: string;
   documentId?: string;
+  weakMessages: ShortwaveReceptionMessage[];
+  carrierMessages: ShortwaveReceptionMessage[];
+  lockedIntroMessages: ShortwaveReceptionMessage[];
+  lockedLoopMessages: ShortwaveReceptionMessage[];
 };
 
 type ShortwaveSignalReading = {
@@ -98,8 +107,11 @@ const utilityApps: UtilityAppMeta[] = [
 
 const localMountDelayMs = 900;
 const externalMountDelayMs = 2400;
+const usbNoticeVisibleMs = 9000;
+const shortwaveReceptionInitialDelayMs = 900;
+const shortwaveReceptionIntervalMs = 3200;
 
-let selectedFileId = caseFiles[0].id;
+let selectedFileId = '';
 let selectedThreadId = chatThreads[0].id;
 let appView: 'boot' | 'login' | 'authenticating' | 'archive' = 'boot';
 let workspaceView: 'files' | 'records' = 'files';
@@ -113,10 +125,18 @@ const unlockedDocumentIds = new Set<string>();
 let shortwaveFrequencyMhz = 6.107;
 let shortwavePhaseRad = 0;
 let fileSearchQuery = '';
+let fileSearchNotice = '';
 let showUsbNotice = false;
+let usbNoticeShouldAnimate = false;
 let mountSequenceScheduled = false;
 let loginError = '';
 let documentUnlockError = '';
+let usbNoticeTimeoutId: number | undefined;
+let shortwaveReceptionTimerId: number | undefined;
+let delayedCommunicationTimerId: number | undefined;
+let delayedCommunicationDelivered = false;
+let showCommunicationNotice = false;
+const unreadThreadIds = new Set<string>();
 
 const shortwaveMinMhz = 3;
 const shortwaveMaxMhz = 12;
@@ -126,6 +146,7 @@ const shortwaveFrequencyDragSensitivityMhz = 0.004;
 const shortwavePhaseStepRad = 0.01;
 const shortwaveWaterfallColumns = 18;
 const shortwaveWaterfallRows = 9;
+const archiveSourceExtension = 'arc';
 
 const shortwaveSignalTargets: ShortwaveSignalTarget[] = [
   {
@@ -140,11 +161,34 @@ const shortwaveSignalTargets: ShortwaveSignalTarget[] = [
     reportName: 'REPORT_NORTHLINE_061.enc',
     keyFormat: 'JANUS-0719-{四位校验码}',
     documentId: 'report-northline-061',
+    weakMessages: [
+      { tone: 'scan', message: '监听 {frequency} MHz：宽带噪声中出现周期性起伏。' },
+      { tone: 'noise', message: '自动增益记录到短暂抬升，解码缓存仍为空。' },
+      { tone: 'scan', message: '低频漂移已压低，未形成稳定载波。' },
+    ],
+    carrierMessages: [
+      { tone: 'near', message: '监听 {frequency} MHz：窄带载波保持，帧同步未通过。' },
+      { tone: 'scan', message: '解码缓存反复写入空帧，等待相位校准。' },
+      { tone: 'near', message: '载波包络稳定，报告头仍不可读。' },
+    ],
+    lockedIntroMessages: [
+      { tone: 'lock', message: '帧同步完成，接收缓存稳定。' },
+      { tone: 'lock', message: '中心频率 {frequency} MHz / 相位校准 {phase} rad / 同步签名 {signature}。' },
+      { tone: 'success', message: '报告名称：{reportName}' },
+      { tone: 'success', message: '密钥格式：{keyFormat}' },
+    ],
+    lockedLoopMessages: [
+      { tone: 'lock', message: '帧同步保持，重复播送报告头。' },
+      { tone: 'success', message: '报告名称：{reportName}' },
+      { tone: 'success', message: '密钥格式：{keyFormat}' },
+    ],
   },
 ];
 
 let shortwaveLogSequence = 6;
 let shortwaveLastLockedTargetId = '';
+let shortwaveReceptionModeKey = 'idle';
+let shortwaveReceptionMessageCursor = 0;
 const shortwaveLogEntries: ShortwaveLogEntry[] = [
   { id: 1, tone: 'scan', message: '00:16:02 接收器启动，监听短波载波。' },
   { id: 2, tone: 'hint', message: '00:16:08 中心振荡器与相位校准器已就绪。' },
@@ -152,6 +196,13 @@ const shortwaveLogEntries: ShortwaveLogEntry[] = [
   { id: 4, tone: 'scan', message: '00:16:31 解码缓存为空。' },
   { id: 5, tone: 'hint', message: '00:16:44 同步门限未满足。' },
   { id: 6, tone: 'noise', message: '00:17:00 等待调谐。' },
+];
+
+const shortwaveDefaultReceptionMessages: ShortwaveReceptionMessage[] = [
+  { tone: 'noise', message: '监听 {frequency} MHz：背景噪声稳定，未发现稳定报告头。' },
+  { tone: 'scan', message: '解码缓存为空，自动增益保持低幅扫描。' },
+  { tone: 'noise', message: '背景噪声微弱颤动，接收窗口无可读帧。' },
+  { tone: 'scan', message: '载波门限未满足，继续监听当前读数。' },
 ];
 
 function startBootSequence(): void {
@@ -174,9 +225,106 @@ function enterArchiveShell(): void {
   selectedDirectoryId = 'local-root';
   selectedDocumentId = '';
   fileSearchQuery = '';
+  fileSearchNotice = '';
   showUsbNotice = false;
+  usbNoticeShouldAnimate = false;
+  clearUsbNoticeTimer();
+  clearShortwaveReceptionTimer();
+  scheduleDelayedCommunicationDelivery();
   render();
   scheduleMountSequence();
+}
+
+function clearUsbNoticeTimer(): void {
+  if (usbNoticeTimeoutId === undefined) return;
+
+  window.clearTimeout(usbNoticeTimeoutId);
+  usbNoticeTimeoutId = undefined;
+}
+
+function showUsbNoticeTemporarily(): void {
+  showUsbNotice = true;
+  usbNoticeShouldAnimate = true;
+  clearUsbNoticeTimer();
+
+  usbNoticeTimeoutId = window.setTimeout(() => {
+    usbNoticeTimeoutId = undefined;
+    if (appView !== 'archive' || !showUsbNotice) return;
+
+    showUsbNotice = false;
+    render();
+  }, usbNoticeVisibleMs);
+}
+
+function dismissUsbNotice(): void {
+  clearUsbNoticeTimer();
+  showUsbNotice = false;
+  usbNoticeShouldAnimate = false;
+}
+
+function clearDelayedCommunicationTimer(): void {
+  if (delayedCommunicationTimerId === undefined) return;
+
+  window.clearTimeout(delayedCommunicationTimerId);
+  delayedCommunicationTimerId = undefined;
+}
+
+function isThreadOpen(threadId: string): boolean {
+  return (
+    appView === 'archive' &&
+    workspaceView === 'records' &&
+    activeUtilityAppId === 'communications' &&
+    communicationsView === 'conversation' &&
+    selectedThreadId === threadId
+  );
+}
+
+function markThreadRead(threadId: string): void {
+  unreadThreadIds.delete(threadId);
+  if (threadId === delayedChatDelivery.threadId) showCommunicationNotice = false;
+}
+
+function openDelayedCommunicationThread(): void {
+  selectedThreadId = delayedChatDelivery.threadId;
+  activeUtilityAppId = 'communications';
+  communicationsView = 'conversation';
+  communicationsReturnView = 'threads';
+  workspaceView = 'records';
+  markThreadRead(delayedChatDelivery.threadId);
+  clearShortwaveReceptionTimer();
+  render();
+}
+
+function deliverDelayedCommunication(): void {
+  delayedCommunicationTimerId = undefined;
+  if (delayedCommunicationDelivered || appView !== 'archive') return;
+
+  const thread = chatThreads.find((item) => item.id === delayedChatDelivery.threadId);
+  if (!thread) return;
+
+  delayedChatDelivery.messages.forEach((message) => {
+    if (!thread.messages.some((item) => item.id === message.id)) {
+      thread.messages.push(message);
+    }
+  });
+
+  delayedCommunicationDelivered = true;
+
+  if (isThreadOpen(delayedChatDelivery.threadId)) {
+    markThreadRead(delayedChatDelivery.threadId);
+  } else {
+    unreadThreadIds.add(delayedChatDelivery.threadId);
+    showCommunicationNotice = true;
+  }
+
+  render();
+}
+
+function scheduleDelayedCommunicationDelivery(): void {
+  clearDelayedCommunicationTimer();
+  if (delayedCommunicationDelivered) return;
+
+  delayedCommunicationTimerId = window.setTimeout(deliverDelayedCommunication, delayedChatDelivery.delayMs);
 }
 
 function scheduleMountSequence(): void {
@@ -193,7 +341,7 @@ function scheduleMountSequence(): void {
   window.setTimeout(() => {
     if (appView !== 'archive') return;
     mountStage = 'external-mounted';
-    showUsbNotice = true;
+    showUsbNoticeTemporarily();
     render();
   }, externalMountDelayMs);
 }
@@ -204,17 +352,31 @@ function openUsbDirectory(): void {
   workspaceView = 'files';
   selectedDirectoryId = 'usb-root';
   selectedDocumentId = '';
-  showUsbNotice = false;
+  fileSearchQuery = '';
+  fileSearchNotice = '';
+  dismissUsbNotice();
   render();
 }
 
 function renderTerminalLineItem(line: TerminalLine, index: number): string {
   const tone = line.tone ?? 'normal';
+  const timeServiceClass = line.updates?.length ? ' boot-line--time-service' : '';
+  const delayMs = line.delayMs ?? index * 560;
+  const textMarkup = line.updates?.length
+    ? `<strong class="boot-line__updates">
+        ${line.updates
+          .map((update, updateIndex) => {
+            const updateClass = updateIndex === line.updates!.length - 1 ? ' class="is-final"' : '';
+            return `<span${updateClass} style="--update-delay: ${updateIndex * 760}ms">${update}</span>`;
+          })
+          .join('')}
+      </strong>`
+    : `<strong>${line.text}</strong>`;
 
   return `
-    <li class="boot-line boot-line--${tone}" style="--delay: ${index * 430}ms">
+    <li class="boot-line boot-line--${tone}${timeServiceClass}" style="--delay: ${delayMs}ms">
       <span>[${line.tag}]</span>
-      <strong>${line.text}</strong>
+      ${textMarkup}
     </li>
   `;
 }
@@ -373,6 +535,10 @@ function getRoleName(roleId: RoleId): string {
   return findRoleDefinition(roleDefinitions, roleId)?.name ?? roleId;
 }
 
+function getRoleShortName(roleId: RoleId): string {
+  return findRoleDefinition(roleDefinitions, roleId)?.shortName ?? roleId.toUpperCase();
+}
+
 function getPermissionLabel(permission: Permission): string {
   const labels: Record<Permission, string> = {
     'case:read': '读取档案',
@@ -429,8 +595,12 @@ function getSelectedDocument(directory: VirtualDirectory): VirtualDocument | und
   if (!selectedDocumentId) return undefined;
 
   return virtualDocuments.find(
-    (document) => document.id === selectedDocumentId && document.directoryId === directory.id,
+    (document) => document.id === selectedDocumentId && document.directoryId === directory.id && isDocumentVisible(document),
   );
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function isDocumentUnlocked(document: VirtualDocument): boolean {
@@ -448,10 +618,23 @@ function getChildDirectories(directory: VirtualDirectory): VirtualDirectory[] {
     .filter((item): item is VirtualDirectory => Boolean(item));
 }
 
+function isDocumentMounted(document: VirtualDocument): boolean {
+  const directory = getDocumentDirectory(document);
+  return Boolean(directory && isVolumeVisible(directory.volumeId));
+}
+
+function isHiddenDocumentDiscovered(document: VirtualDocument): boolean {
+  return !document.hidden || profile.discoveredFlags.includes(document.hidden.discoveredFlag);
+}
+
+function isDocumentVisible(document: VirtualDocument): boolean {
+  return isDocumentMounted(document) && isHiddenDocumentDiscovered(document);
+}
+
 function getDirectoryDocuments(directory: VirtualDirectory): VirtualDocument[] {
   return directory.fileIds
     .map((fileId) => virtualDocuments.find((document) => document.id === fileId))
-    .filter((document): document is VirtualDocument => Boolean(document));
+    .filter((document): document is VirtualDocument => Boolean(document && isDocumentVisible(document)));
 }
 
 function getDocumentDirectory(document: VirtualDocument): VirtualDirectory | undefined {
@@ -463,11 +646,36 @@ function getDocumentPath(document: VirtualDocument): string {
   return `${directory?.path ?? ''}${document.name}.${document.extension}`;
 }
 
-function getVisibleDocuments(): VirtualDocument[] {
-  return virtualDocuments.filter((document) => {
-    const directory = getDocumentDirectory(document);
-    return Boolean(directory && isVolumeVisible(directory.volumeId));
+function isArchiveSourceDocument(document: VirtualDocument): boolean {
+  return document.extension.toLowerCase() === archiveSourceExtension;
+}
+
+function getCaseSourceDocument(file: CaseFile): VirtualDocument | undefined {
+  return virtualDocuments.find(
+    (document) =>
+      document.id === file.sourceDocumentId &&
+      document.archiveCaseId === file.id &&
+      isArchiveSourceDocument(document),
+  );
+}
+
+function getParseableCaseFiles(): CaseFile[] {
+  return caseFiles.filter((file) => {
+    const sourceDocument = getCaseSourceDocument(file);
+    if (!sourceDocument) return false;
+
+    return isDocumentVisible(sourceDocument);
   });
+}
+
+function getCaseSourcePath(file: CaseFile): string {
+  const sourceDocument = getCaseSourceDocument(file);
+  if (!sourceDocument) return 'SOURCE MISSING';
+  return getDocumentPath(sourceDocument);
+}
+
+function getVisibleDocuments(): VirtualDocument[] {
+  return virtualDocuments.filter((document) => isDocumentVisible(document));
 }
 
 function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): boolean {
@@ -478,6 +686,7 @@ function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): 
     document.classification,
     getDocumentPath(document),
     ...document.tags,
+    ...(document.hidden?.keywords ?? []),
     ...searchableBody,
   ]
     .join(' ')
@@ -486,17 +695,54 @@ function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): 
   return haystack.includes(normalizedQuery);
 }
 
+function matchesHiddenDiscovery(document: VirtualDocument, normalizedQuery: string): boolean {
+  if (!document.hidden || !normalizedQuery) return false;
+
+  return document.hidden.keywords.some((keyword) => {
+    const normalizedKeyword = normalizeSearchText(keyword);
+    return Boolean(normalizedKeyword && (normalizedQuery === normalizedKeyword || normalizedQuery.includes(normalizedKeyword)));
+  });
+}
+
+function revealHiddenDocumentsForSearch(query: string): VirtualDocument[] {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return [];
+
+  const revealedDocuments: VirtualDocument[] = [];
+
+  virtualDocuments.forEach((document) => {
+    if (!document.hidden || isHiddenDocumentDiscovered(document) || !isDocumentMounted(document)) return;
+    if (!matchesHiddenDiscovery(document, normalizedQuery)) return;
+
+    profile.discoveredFlags.push(document.hidden.discoveredFlag);
+    revealedDocuments.push(document);
+  });
+
+  return revealedDocuments;
+}
+
+function getHiddenRevealNotice(documents: VirtualDocument[]): string {
+  if (!documents.length) return '';
+
+  const messages = documents
+    .map((document) => document.hidden?.revealMessage)
+    .filter((message): message is string => Boolean(message));
+
+  if (messages.length) return Array.from(new Set(messages)).join(' ');
+  return `索引重建：恢复 ${documents.length} 个此前未登记的镜像条目。`;
+}
+
 function getFileSearchRank(document: VirtualDocument, normalizedQuery: string): number {
   const fileName = `${document.name}.${document.extension}`.toLowerCase();
   if (fileName.includes(normalizedQuery)) return 0;
   if (getDocumentPath(document).toLowerCase().includes(normalizedQuery)) return 1;
-  if (document.tags.join(' ').toLowerCase().includes(normalizedQuery)) return 2;
+  if ([...document.tags, ...(document.hidden?.keywords ?? [])].join(' ').toLowerCase().includes(normalizedQuery)) return 2;
   if (document.classification.toLowerCase().includes(normalizedQuery)) return 3;
   return 4;
 }
 
 function getFileSearchResults(): VirtualDocument[] {
-  const normalizedQuery = fileSearchQuery.trim().toLowerCase();
+  const normalizedQuery = normalizeSearchText(fileSearchQuery);
   if (!normalizedQuery) return [];
 
   return getVisibleDocuments()
@@ -513,12 +759,14 @@ function getVolume(volumeId: string): VirtualVolume {
 }
 
 function renderWorkspaceSwitcher(): string {
+  const recordsAlertClass = unreadThreadIds.size ? ' has-alert' : '';
+
   return `
     <nav class="workspace-switcher" aria-label="工作区切换">
       <button class="${workspaceView === 'files' ? 'is-active' : ''}" type="button" data-workspace-view="files">
         文件管理器
       </button>
-      <button class="${workspaceView === 'records' ? 'is-active' : ''}" type="button" data-workspace-view="records">
+      <button class="${workspaceView === 'records' ? 'is-active' : ''}${recordsAlertClass}" type="button" data-workspace-view="records">
         档案记录
       </button>
     </nav>
@@ -574,8 +822,8 @@ function renderMountStatus(label: string, title: string, message: string, withPr
 }
 
 function renderDirectoryRow(directory: VirtualDirectory, icon = 'DIR'): string {
-  const directoryCount = directory.directoryIds.length;
-  const fileCount = directory.fileIds.length;
+  const directoryCount = getChildDirectories(directory).length;
+  const fileCount = getDirectoryDocuments(directory).length;
 
   return `
     <button class="document-row document-row--directory" type="button" data-directory-id="${directory.id}">
@@ -633,10 +881,21 @@ function renderFileSearchForm(): string {
   return `
     <form class="file-search" id="fileSearchForm">
       <span>SEARCH</span>
-      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" placeholder="phase / signal_log / 报告名" aria-label="搜索文件" />
+      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" aria-label="搜索文件" autocomplete="off" />
       <button type="submit">搜索</button>
       ${fileSearchQuery ? '<button type="button" data-file-search-clear>清除</button>' : ''}
     </form>
+  `;
+}
+
+function renderFileSearchNotice(): string {
+  if (!fileSearchNotice) return '';
+
+  return `
+    <div class="file-search-notice">
+      <span>INDEX</span>
+      <strong>${escapeHtml(fileSearchNotice)}</strong>
+    </div>
   `;
 }
 
@@ -666,6 +925,13 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
   }
 
   const documentBody = getDocumentBody(document);
+  const bodyClasses = [
+    'document-body',
+    document.unlock && !isDocumentUnlocked(document) ? 'document-body--locked' : '',
+    isArchiveSourceDocument(document) ? 'document-body--cipher' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return `
     <section class="document-panel" aria-label="文档预览">
@@ -685,7 +951,7 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
           <strong>${document.sizeLabel}</strong>
         </div>
       </div>
-      <article class="document-body ${document.unlock && !isDocumentUnlocked(document) ? 'document-body--locked' : ''}">
+      <article class="${bodyClasses}">
         ${documentBody.map((paragraph) => `<p>${paragraph}</p>`).join('')}
       </article>
       ${renderDocumentUnlockPanel(document)}
@@ -729,6 +995,8 @@ function renderFileManagerWorkspace(): string {
   const selectedDocument = directory ? getSelectedDocument(directory) : undefined;
   const volume = directory ? getVolume(directory.volumeId) : undefined;
   const searchResults = fileSearchQuery ? getFileSearchResults() : [];
+  const directoryCount = directory ? getChildDirectories(directory).length : 0;
+  const fileCount = directory ? getDirectoryDocuments(directory).length : 0;
 
   if (!directory || !volume) {
     return `
@@ -789,9 +1057,10 @@ function renderFileManagerWorkspace(): string {
         </header>
         <div class="directory-meta">
           <span>${fileSearchQuery ? `搜索已挂载介质：${escapeHtml(fileSearchQuery)}` : volume.description}</span>
-          <span>${fileSearchQuery ? `${searchResults.length} RESULTS` : `${directory.directoryIds.length} DIRS / ${directory.fileIds.length} FILES`}</span>
+          <span>${fileSearchQuery ? `${searchResults.length} RESULTS` : `${directoryCount} DIRS / ${fileCount} FILES`}</span>
         </div>
         ${renderFileSearchForm()}
+        ${renderFileSearchNotice()}
         <div class="document-list">
           ${fileSearchQuery ? renderFileSearchResults(searchResults) : renderDirectoryList(directory)}
         </div>
@@ -803,21 +1072,22 @@ function renderFileManagerWorkspace(): string {
 }
 
 function renderFileList(): string {
-  return caseFiles
+  return getParseableCaseFiles()
     .map((file) => {
       const selected = file.id === selectedFileId ? 'is-selected' : '';
       const statusClass = getStatusClass(file, profile);
       const access = evaluateAccess(profile, file.access);
+      const sourceDocument = getCaseSourceDocument(file);
 
       return `
         <button class="file-row ${selected}" type="button" data-file-id="${file.id}">
-          <span class="file-row__code">${file.code}</span>
+          <span class="file-row__code" title="${escapeHtml(file.code)}" aria-label="档案编号 ${escapeHtml(file.code)}">${escapeHtml(file.code)}</span>
           <span class="file-row__main">
             <span class="file-row__title">${file.title}</span>
             <span class="file-row__meta">${file.unit}</span>
           </span>
           <span class="status-pill status-pill--${statusClass}">${getStatusLabel(file, profile)}</span>
-          <span class="access-stub">${access.allowed ? file.classification : 'LOCK / ' + file.classification}</span>
+          <span class="access-stub">${sourceDocument?.name}.${sourceDocument?.extension} / ${access.allowed ? file.classification : 'LOCK / ' + file.classification}</span>
         </button>
       `;
     })
@@ -838,7 +1108,7 @@ function renderRoleSummary(): string {
       </div>
       <dl class="session-grid">
         <div>
-          <dt>调查员</dt>
+          <dt>镜像账号</dt>
           <dd>${profile.displayName}</dd>
         </div>
         <div>
@@ -851,25 +1121,190 @@ function renderRoleSummary(): string {
   `;
 }
 
-function renderFragments(file: CaseFile): string {
-  return file.fragments.map((fragment, index) => renderFragment(file, fragment, index)).join('');
-}
-
-function renderFragment(file: CaseFile, fragment: CaseFragment, index: number): string {
+function getFragmentView(file: CaseFile, fragment: CaseFragment): { body: string; isRedacted: boolean } {
   const rule = fragment.access ?? file.access;
   const access = evaluateAccess(profile, rule);
   const body = access.allowed ? fragment.body : fragment.redactedText ?? '权限不足：该字段被遮蔽。';
-  const redactedClass = access.allowed ? '' : 'is-redacted';
+
+  return {
+    body,
+    isRedacted: !access.allowed,
+  };
+}
+
+function splitLogLine(body: string): { marker: string; text: string } {
+  const match = body.match(/^(\d{2}:\d{2})\s+(.+)$/);
+  if (!match) return { marker: '--:--', text: body };
+
+  return {
+    marker: match[1],
+    text: match[2],
+  };
+}
+
+function splitTranscriptLine(fragment: CaseFragment, body: string): { speaker: string; text: string } {
+  const match = body.match(/^([^:：]{1,12})[:：]\s*(.+)$/);
+  if (!match) return { speaker: fragment.label, text: body };
+
+  return {
+    speaker: match[1],
+    text: match[2],
+  };
+}
+
+function renderPlainFragments(file: CaseFile): string {
+  const text = file.fragments.map((fragment) => getFragmentView(file, fragment).body).join('\n\n');
 
   return `
-    <li class="${redactedClass}">
-      <span class="fragment-index">${String(index + 1).padStart(2, '0')}</span>
-      <span>
-        <strong>${fragment.label}</strong>
-        ${body}
-      </span>
-    </li>
+    <article class="record-body record-body--plain">
+      <pre>${escapeHtml(text)}</pre>
+    </article>
   `;
+}
+
+function renderArticleFragments(file: CaseFile): string {
+  return `
+    <article class="record-body record-body--article">
+      ${file.fragments
+        .map((fragment) => {
+          const view = getFragmentView(file, fragment);
+          const redactedClass = view.isRedacted ? ' is-redacted' : '';
+
+          return `
+            <section class="record-section${redactedClass}">
+              <h3>${fragment.label}</h3>
+              <p>${view.body}</p>
+            </section>
+          `;
+        })
+        .join('')}
+    </article>
+  `;
+}
+
+function renderLogFragments(file: CaseFile): string {
+  return `
+    <div class="section-title">
+      <span>事件日志</span>
+      <span>LOG</span>
+    </div>
+    <ol class="fragments fragments--log">
+      ${file.fragments
+        .map((fragment) => {
+          const view = getFragmentView(file, fragment);
+          const redactedClass = view.isRedacted ? ' class="is-redacted"' : '';
+          const line = splitLogLine(view.body);
+
+          return `
+            <li${redactedClass}>
+              <time>${line.marker}</time>
+              <span>
+                <strong>${fragment.label}</strong>
+                ${line.text}
+              </span>
+            </li>
+          `;
+        })
+        .join('')}
+    </ol>
+  `;
+}
+
+function renderFormFragments(file: CaseFile): string {
+  return `
+    <dl class="record-body record-body--form">
+      ${file.fragments
+        .map((fragment) => {
+          const view = getFragmentView(file, fragment);
+          const redactedClass = view.isRedacted ? ' class="is-redacted"' : '';
+
+          return `
+            <div${redactedClass}>
+              <dt>${fragment.label}</dt>
+              <dd>${view.body}</dd>
+            </div>
+          `;
+        })
+        .join('')}
+    </dl>
+  `;
+}
+
+function renderTranscriptFragments(file: CaseFile): string {
+  return `
+    <article class="record-body record-body--transcript">
+      ${file.fragments
+        .map((fragment) => {
+          const view = getFragmentView(file, fragment);
+          const redactedClass = view.isRedacted ? ' is-redacted' : '';
+          const line = splitTranscriptLine(fragment, view.body);
+
+          return `
+            <section class="transcript-line${redactedClass}">
+              <strong>${line.speaker}</strong>
+              <p>${line.text}</p>
+            </section>
+          `;
+        })
+        .join('')}
+    </article>
+  `;
+}
+
+function renderTableFragments(file: CaseFile): string {
+  if (!file.table) return renderArticleFragments(file);
+  const introMarkup = file.fragments
+    .map((fragment) => {
+      const view = getFragmentView(file, fragment);
+      const redactedClass = view.isRedacted ? ' is-redacted' : '';
+
+      return `
+        <section class="record-section${redactedClass}">
+          <h3>${fragment.label}</h3>
+          <p>${view.body}</p>
+        </section>
+      `;
+    })
+    .join('');
+
+  return `
+    <article class="record-body record-body--table">
+      ${introMarkup ? `<div class="record-table-intro">${introMarkup}</div>` : ''}
+      <div class="record-table-wrap">
+        <table class="record-table">
+          <thead>
+            <tr>
+              ${file.table.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${file.table.rows
+              .map(
+                (row) => `
+                  <tr>
+                    ${file.table!.columns
+                      .map((_, columnIndex) => `<td>${escapeHtml(row[columnIndex] ?? '')}</td>`)
+                      .join('')}
+                  </tr>
+                `,
+              )
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+      ${file.table.note ? `<p class="record-table-note">${escapeHtml(file.table.note)}</p>` : ''}
+    </article>
+  `;
+}
+
+function renderCaseBody(file: CaseFile): string {
+  if (file.presentation === 'plain') return renderPlainFragments(file);
+  if (file.presentation === 'log') return renderLogFragments(file);
+  if (file.presentation === 'form') return renderFormFragments(file);
+  if (file.presentation === 'transcript') return renderTranscriptFragments(file);
+  if (file.presentation === 'table') return renderTableFragments(file);
+
+  return renderArticleFragments(file);
 }
 
 function renderRequirementList(rule: AccessRule): string {
@@ -906,6 +1341,23 @@ function renderRequirementList(rule: AccessRule): string {
   return `<ul class="access-list">${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
 }
 
+function renderRecordPlaceholder(): string {
+  return `
+    <section class="record-panel" aria-label="档案记录">
+      <header class="panel-header">
+        <div>
+          <p class="eyebrow">RECORD</p>
+          <h2>等待档案解析</h2>
+        </div>
+      </header>
+
+      <article class="document-body document-body--empty">
+        <p>当前没有打开的档案。请从左侧档案索引中选择一条可解析记录。</p>
+      </article>
+    </section>
+  `;
+}
+
 function renderRestrictedFile(file: CaseFile): string {
   return `
     <section class="record-panel" aria-label="档案记录">
@@ -926,18 +1378,23 @@ function renderRestrictedFile(file: CaseFile): string {
           <strong>${file.date}</strong>
         </div>
         <div class="field">
+          <span>源文件</span>
+          <strong>${getCaseSourcePath(file)}</strong>
+        </div>
+        <div class="field">
           <span>访问结果</span>
           <strong>授权不足</strong>
         </div>
-      </div>
-
-      <div class="summary summary--restricted">
-        <p>${file.teaser}</p>
+        <div class="field">
+          <span>解析格式</span>
+          <strong>.${archiveSourceExtension.toUpperCase()}</strong>
+        </div>
       </div>
 
       <div class="access-panel">
         <p class="eyebrow">ACCESS RULE</p>
         <h3>凭据不满足读取条件</h3>
+        <p class="access-panel__teaser">${file.teaser}</p>
         ${renderRequirementList(file.access)}
       </div>
 
@@ -975,20 +1432,20 @@ function renderActiveFile(file: CaseFile): string {
           <strong>${file.date}</strong>
         </div>
         <div class="field">
+          <span>源文件</span>
+          <strong>${getCaseSourcePath(file)}</strong>
+        </div>
+        <div class="field">
           <span>记录状态</span>
           <strong>${getReviewLabel(file.reviewStatus)}</strong>
         </div>
+        <div class="field">
+          <span>解析格式</span>
+          <strong>.${archiveSourceExtension.toUpperCase()}</strong>
+        </div>
       </div>
 
-      <p class="summary">${file.summary}</p>
-
-      <div class="section-title">
-        <span>记录条目</span>
-        <span>ENTRIES</span>
-      </div>
-      <ul class="fragments">
-        ${renderFragments(file)}
-      </ul>
+      ${renderCaseBody(file)}
 
       <div class="operator-note">
         <span>内部备注</span>
@@ -1152,14 +1609,17 @@ function renderContactDetail(): string {
 
 function renderUtilityTabs(): string {
   return utilityApps
-    .map(
-      (utilityApp) => `
-        <button class="utility-tab ${activeUtilityAppId === utilityApp.id ? 'is-active' : ''}" type="button" data-utility-app="${utilityApp.id}">
+    .map((utilityApp) => {
+      const activeClass = activeUtilityAppId === utilityApp.id ? ' is-active' : '';
+      const alertClass = utilityApp.id === 'communications' && unreadThreadIds.size ? ' has-alert' : '';
+
+      return `
+        <button class="utility-tab${activeClass}${alertClass}" type="button" data-utility-app="${utilityApp.id}">
           <span>${utilityApp.command}</span>
           <strong>${utilityApp.label}</strong>
         </button>
-      `,
-    )
+      `;
+    })
     .join('');
 }
 
@@ -1268,23 +1728,65 @@ function appendShortwaveLog(tone: ShortwaveLogTone, message: string): void {
   });
 }
 
-function recordShortwaveReception(): void {
+function clearShortwaveReceptionTimer(): void {
+  if (shortwaveReceptionTimerId === undefined) return;
+
+  window.clearTimeout(shortwaveReceptionTimerId);
+  shortwaveReceptionTimerId = undefined;
+}
+
+function shouldRunShortwaveReceptionStream(): boolean {
+  return appView === 'archive' && workspaceView === 'records' && activeUtilityAppId === 'shortwave';
+}
+
+function getShortwaveReceptionModeKey(reading: ShortwaveSignalReading): string {
+  if (reading.locked) return `lock:${reading.target.id}`;
+  if (reading.strength >= 0.72) return `carrier:${reading.target.id}`;
+  if (reading.strength >= 0.38) return `weak:${reading.target.id}`;
+  return 'noise';
+}
+
+function updateShortwaveReceptionMode(reading: ShortwaveSignalReading): void {
+  const nextModeKey = getShortwaveReceptionModeKey(reading);
+  if (nextModeKey === shortwaveReceptionModeKey) return;
+
+  shortwaveReceptionModeKey = nextModeKey;
+  shortwaveReceptionMessageCursor = 0;
+}
+
+function formatShortwaveReceptionMessage(message: string, reading: ShortwaveSignalReading): string {
+  return message
+    .replaceAll('{frequency}', formatShortwaveFrequency(shortwaveFrequencyMhz))
+    .replaceAll('{phase}', formatShortwavePhase(shortwavePhaseRad))
+    .replaceAll('{signature}', getShortwaveSyncSignature(reading.target))
+    .replaceAll('{reportName}', reading.target.reportName)
+    .replaceAll('{keyFormat}', reading.target.keyFormat)
+    .replaceAll('{label}', reading.target.label);
+}
+
+function appendNextShortwaveReceptionMessage(messages: ShortwaveReceptionMessage[], reading: ShortwaveSignalReading): void {
+  if (messages.length === 0) return;
+
+  const message = messages[shortwaveReceptionMessageCursor % messages.length];
+  shortwaveReceptionMessageCursor += 1;
+  appendShortwaveLog(message.tone, formatShortwaveReceptionMessage(message.message, reading));
+}
+
+function recordShortwaveReceptionTick(): void {
   const reading = getClosestShortwaveSignal();
-  const frequency = formatShortwaveFrequency(shortwaveFrequencyMhz);
-  const phase = formatShortwavePhase(shortwavePhaseRad);
-  const signature = getShortwaveSyncSignature(reading.target);
+  updateShortwaveReceptionMode(reading);
 
   if (reading.locked) {
     if (shortwaveLastLockedTargetId !== reading.target.id) {
       shortwaveLastLockedTargetId = reading.target.id;
-      appendShortwaveLog('lock', '帧同步完成，接收缓存稳定。');
-      appendShortwaveLog('lock', `中心频率 ${frequency} MHz / 相位校准 ${phase} rad / 同步签名 ${signature}。`);
-      appendShortwaveLog('success', `报告名称：${reading.target.reportName}`);
-      appendShortwaveLog('success', `密钥格式：${reading.target.keyFormat}`);
+      reading.target.lockedIntroMessages.forEach((message) => {
+        appendShortwaveLog(message.tone, formatShortwaveReceptionMessage(message.message, reading));
+      });
+      shortwaveReceptionMessageCursor = 0;
       return;
     }
 
-    appendShortwaveLog('lock', '帧同步保持，接收缓存稳定。');
+    appendNextShortwaveReceptionMessage(reading.target.lockedLoopMessages, reading);
     return;
   }
 
@@ -1294,16 +1796,45 @@ function recordShortwaveReception(): void {
   }
 
   if (reading.strength >= 0.72) {
-    appendShortwaveLog('scan', '载波能量波动，解码缓存仍未形成有效帧。');
+    appendNextShortwaveReceptionMessage(reading.target.carrierMessages, reading);
     return;
   }
 
   if (reading.strength >= 0.38) {
-    appendShortwaveLog('scan', '宽带噪声中出现周期性起伏。');
+    appendNextShortwaveReceptionMessage(reading.target.weakMessages, reading);
     return;
   }
 
-  appendShortwaveLog('noise', '背景噪声微弱颤动，未发现稳定报告头。');
+  appendNextShortwaveReceptionMessage(shortwaveDefaultReceptionMessages, reading);
+}
+
+function scheduleShortwaveReceptionTick(delayMs: number): void {
+  clearShortwaveReceptionTimer();
+  if (!shouldRunShortwaveReceptionStream()) return;
+
+  shortwaveReceptionTimerId = window.setTimeout(() => {
+    shortwaveReceptionTimerId = undefined;
+    if (!shouldRunShortwaveReceptionStream()) return;
+
+    recordShortwaveReceptionTick();
+    render();
+  }, delayMs);
+}
+
+function restartShortwaveReceptionStream(): void {
+  updateShortwaveReceptionMode(getClosestShortwaveSignal());
+  scheduleShortwaveReceptionTick(shortwaveReceptionInitialDelayMs);
+}
+
+function syncShortwaveReceptionTimer(): void {
+  if (!shouldRunShortwaveReceptionStream()) {
+    clearShortwaveReceptionTimer();
+    return;
+  }
+
+  if (shortwaveReceptionTimerId === undefined) {
+    scheduleShortwaveReceptionTick(shortwaveReceptionIntervalMs);
+  }
 }
 
 function renderHighlightedShortwaveMessage(message: string): string {
@@ -1450,16 +1981,18 @@ function renderCommunicationsTool(): string {
   const threadRows = chatThreads
     .map((thread) => {
       const selected = thread.id === selectedThreadId ? 'is-active' : '';
+      const unread = unreadThreadIds.has(thread.id);
+      const unreadClass = unread ? 'thread-row--unread' : '';
       const access = evaluateAccess(profile, thread.access);
 
       return `
-        <article class="thread-row ${selected}">
+        <article class="thread-row ${selected} ${unreadClass}">
           ${renderContactAvatar(thread)}
           <button class="thread-row__open" type="button" data-thread-id="${thread.id}">
             <strong>${thread.contactName}</strong>
             <span>${thread.subtitle}</span>
           </button>
-          <em>${access.allowed ? getThreadKindLabel(thread) : 'LOCKED'}</em>
+          <em>${unread ? 'NEW' : access.allowed ? getThreadKindLabel(thread) : 'LOCKED'}</em>
         </article>
       `;
     })
@@ -1537,7 +2070,7 @@ function getUtilityCommand(): string {
   return utilityApps.find((utilityApp) => utilityApp.id === activeUtilityAppId)?.command ?? activeUtilityAppId;
 }
 
-function renderRecordsWorkspace(activeFile: CaseFile): string {
+function renderRecordsWorkspace(activeFile: CaseFile | undefined): string {
   return `
     <section class="workspace workspace--records">
       <aside class="sidebar" aria-label="档案列表">
@@ -1550,14 +2083,14 @@ function renderRecordsWorkspace(activeFile: CaseFile): string {
         ${renderRoleSummary()}
         <div class="search-strip">
           <span>QUERY</span>
-          <input type="text" value="北线 灯塔 匿名信 权限" aria-label="档案搜索" />
+          <input type="text" value="" aria-label="档案搜索" autocomplete="off" />
         </div>
         <nav class="file-list">
           ${renderFileList()}
         </nav>
       </aside>
 
-      ${renderActiveFile(activeFile)}
+      ${activeFile ? renderActiveFile(activeFile) : renderRecordPlaceholder()}
 
       <aside class="utility-panel" aria-label="辅助软件">
         <header class="utility-tabs" aria-label="软件标签页">
@@ -1577,9 +2110,11 @@ function renderRecordsWorkspace(activeFile: CaseFile): string {
 
 function renderUsbNotice(): string {
   if (!showUsbNotice) return '';
+  const animationClass = usbNoticeShouldAnimate ? ' usb-notice--entering' : '';
+  usbNoticeShouldAnimate = false;
 
   return `
-    <aside class="usb-notice" aria-label="外接介质检测">
+    <aside class="usb-notice${animationClass}" aria-label="外接介质检测">
       <div>
         <p class="eyebrow">REMOVABLE DRIVE</p>
         <h2>可移动磁盘已插入</h2>
@@ -1593,11 +2128,30 @@ function renderUsbNotice(): string {
   `;
 }
 
+function renderCommunicationNotice(): string {
+  if (!showCommunicationNotice) return '';
+
+  return `
+    <aside class="comm-notice" aria-label="通信消息提示">
+      <div>
+        <p class="eyebrow">SECURE-COMM</p>
+        <h2>${delayedChatDelivery.noticeTitle}</h2>
+      </div>
+      <p>${delayedChatDelivery.noticeBody}</p>
+      <div class="comm-notice__actions">
+        <button type="button" data-comm-notice-action="open">打开通信</button>
+        <button type="button" data-comm-notice-action="dismiss">稍后处理</button>
+      </div>
+    </aside>
+  `;
+}
+
 function renderTerminalLine(): string {
-  const readableCount = caseFiles.filter((file) => evaluateAccess(profile, file.access).allowed).length;
-  const solvedCount = caseFiles.filter((file) => file.reviewStatus === 'solved').length;
+  const parseableCaseFiles = getParseableCaseFiles();
+  const readableCount = parseableCaseFiles.filter((file) => evaluateAccess(profile, file.access).allowed).length;
+  const solvedCount = parseableCaseFiles.filter((file) => file.reviewStatus === 'solved').length;
   const workspaceLabel = workspaceView === 'files' ? 'FILE MANAGER' : `RECORDS / ${activeUtilityAppId.toUpperCase()}`;
-  return `SYS: ${caseFiles.length} RECORDS / ${readableCount} READABLE / ${solvedCount} VERIFIED / ${workspaceLabel} / ROLE ${profile.activeRole.toUpperCase()}`;
+  return `SYS: ${parseableCaseFiles.length} RECORDS / ${readableCount} READABLE / ${solvedCount} VERIFIED / ${workspaceLabel} / ROLE ${getRoleShortName(profile.activeRole)}`;
 }
 
 function bindArchiveEvents(): void {
@@ -1606,6 +2160,11 @@ function bindArchiveEvents(): void {
       const view = button.dataset.workspaceView;
       if (view !== 'files' && view !== 'records') return;
       workspaceView = view;
+      if (workspaceView === 'records' && activeUtilityAppId === 'shortwave') {
+        restartShortwaveReceptionStream();
+      } else {
+        clearShortwaveReceptionTimer();
+      }
       render();
     });
   });
@@ -1617,6 +2176,11 @@ function bindArchiveEvents(): void {
 
       activeUtilityAppId = appId;
       workspaceView = 'records';
+      if (appId === 'shortwave') {
+        restartShortwaveReceptionStream();
+      } else {
+        clearShortwaveReceptionTimer();
+      }
       render();
     });
   });
@@ -1630,18 +2194,31 @@ function bindArchiveEvents(): void {
       selectedDirectoryId = directory.id;
       selectedDocumentId = '';
       fileSearchQuery = '';
+      fileSearchNotice = '';
       documentUnlockError = '';
-      showUsbNotice = false;
       render();
     });
   });
 
   document.querySelectorAll<HTMLButtonElement>('[data-document-id]').forEach((button) => {
     button.addEventListener('click', () => {
+      const documentId = button.dataset.documentId;
       const directoryId = button.dataset.documentDirectoryId;
+      const isSelectedDocument = Boolean(
+        documentId && documentId === selectedDocumentId && (!directoryId || directoryId === selectedDirectoryId),
+      );
+
+      if (isSelectedDocument) {
+        selectedDocumentId = '';
+        documentUnlockError = '';
+        render();
+        return;
+      }
+
       if (directoryId) selectedDirectoryId = directoryId;
-      selectedDocumentId = button.dataset.documentId ?? selectedDocumentId;
+      selectedDocumentId = documentId ?? selectedDocumentId;
       fileSearchQuery = '';
+      fileSearchNotice = '';
       documentUnlockError = '';
       render();
     });
@@ -1652,6 +2229,7 @@ function bindArchiveEvents(): void {
     event.preventDefault();
     const formData = new FormData(fileSearchForm);
     fileSearchQuery = String(formData.get('fileSearch') ?? '').trim();
+    fileSearchNotice = getHiddenRevealNotice(revealHiddenDocumentsForSearch(fileSearchQuery));
     selectedDocumentId = '';
     documentUnlockError = '';
     render();
@@ -1660,6 +2238,7 @@ function bindArchiveEvents(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-file-search-clear]').forEach((button) => {
     button.addEventListener('click', () => {
       fileSearchQuery = '';
+      fileSearchNotice = '';
       documentUnlockError = '';
       render();
     });
@@ -1700,7 +2279,8 @@ function bindArchiveEvents(): void {
 
   document.querySelectorAll<HTMLButtonElement>('[data-file-id]').forEach((button) => {
     button.addEventListener('click', () => {
-      selectedFileId = button.dataset.fileId ?? selectedFileId;
+      const fileId = button.dataset.fileId;
+      selectedFileId = fileId === selectedFileId ? '' : fileId ?? selectedFileId;
       render();
     });
   });
@@ -1712,6 +2292,7 @@ function bindArchiveEvents(): void {
       communicationsView = 'conversation';
       communicationsReturnView = 'threads';
       workspaceView = 'records';
+      markThreadRead(selectedThreadId);
       render();
     });
   });
@@ -1748,7 +2329,7 @@ function bindArchiveEvents(): void {
   document.querySelectorAll<HTMLInputElement>('[data-shortwave-phase]').forEach((input) => {
     input.addEventListener('change', () => {
       tuneShortwavePhase(Number.parseFloat(input.value));
-      recordShortwaveReception();
+      restartShortwaveReceptionStream();
       render();
     });
   });
@@ -1762,7 +2343,7 @@ function bindArchiveEvents(): void {
       }
 
       tuneShortwavePhase(value);
-      recordShortwaveReception();
+      restartShortwaveReceptionStream();
       render();
     };
 
@@ -1778,7 +2359,7 @@ function bindArchiveEvents(): void {
     button.addEventListener('click', () => {
       const step = Number.parseFloat(button.dataset.phaseStep ?? '0');
       tuneShortwavePhase(shortwavePhaseRad + step);
-      recordShortwaveReception();
+      restartShortwaveReceptionStream();
       render();
     });
   });
@@ -1792,7 +2373,7 @@ function bindArchiveEvents(): void {
       }
 
       tuneShortwaveFrequency(value);
-      recordShortwaveReception();
+      restartShortwaveReceptionStream();
       render();
     };
 
@@ -1810,7 +2391,7 @@ function bindArchiveEvents(): void {
       (event) => {
         event.preventDefault();
         tuneShortwaveFrequency(shortwaveFrequencyMhz + (event.deltaY > 0 ? -0.001 : 0.001));
-        recordShortwaveReception();
+        restartShortwaveReceptionStream();
         render();
       },
       { passive: false },
@@ -1838,7 +2419,7 @@ function bindArchiveEvents(): void {
         document.removeEventListener('pointermove', handlePointerMove);
         document.removeEventListener('pointerup', handlePointerUp);
         if (!moved) tuneShortwaveFrequency(startFrequency + 0.001);
-        recordShortwaveReception();
+        restartShortwaveReceptionStream();
         render();
       };
 
@@ -1856,7 +2437,19 @@ function bindArchiveEvents(): void {
         return;
       }
 
-      showUsbNotice = false;
+      dismissUsbNotice();
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-comm-notice-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.dataset.commNoticeAction === 'open') {
+        openDelayedCommunicationThread();
+        return;
+      }
+
+      showCommunicationNotice = false;
       render();
     });
   });
@@ -1864,6 +2457,13 @@ function bindArchiveEvents(): void {
 
 function keepShortwaveLogAtLatest(): void {
   const log = document.querySelector<HTMLElement>('[data-shortwave-log]');
+  if (!log) return;
+
+  log.scrollTop = log.scrollHeight;
+}
+
+function keepChatLogAtLatest(): void {
+  const log = document.querySelector<HTMLElement>('.chat-log');
   if (!log) return;
 
   log.scrollTop = log.scrollHeight;
@@ -1886,7 +2486,8 @@ function render(): void {
     return;
   }
 
-  const activeFile = caseFiles.find((file) => file.id === selectedFileId) ?? caseFiles[0];
+  const parseableCaseFiles = getParseableCaseFiles();
+  const activeFile = parseableCaseFiles.find((file) => file.id === selectedFileId);
   const workspaceMarkup =
     workspaceView === 'files' ? renderFileManagerWorkspace() : renderRecordsWorkspace(activeFile);
 
@@ -1910,6 +2511,7 @@ function render(): void {
 
       ${workspaceMarkup}
       ${renderUsbNotice()}
+      ${renderCommunicationNotice()}
 
       <footer class="terminal-bar">
         <span>${renderTerminalLine()}</span>
@@ -1920,6 +2522,8 @@ function render(): void {
 
   bindArchiveEvents();
   keepShortwaveLogAtLatest();
+  keepChatLogAtLatest();
+  syncShortwaveReceptionTimer();
 }
 
 startBootSequence();

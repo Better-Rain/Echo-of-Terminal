@@ -177,7 +177,7 @@ export type VirtualDocument = {
   archiveCaseId?: string;
   hidden?: {
     discoveredFlag: string;
-    keywords: string[];
+    recoveryCode: string;
     revealMessage?: string;
   };
   modified: string;

@@ -68,8 +68,8 @@ npm run build
 - 加密报告位于 `DISK://LOCAL/RECORDS/REPORTS/REPORT_NORTHLINE_061.enc`，完整密钥为 `JANUS-0719-6149`。
 - 解锁报告会向当前 `PlayerProfile` 写入 `report.northline-061` 和 `shortwave.report-061`，但刷新后不持久化。
 - 文件管理器搜索会检索已挂载文档的名称、路径、分级、标签和当前可见正文。加密文档未解锁前只检索锁定提示正文，不检索隐藏正文。
-- 隐藏文档已接入通用机制：`VirtualDocument.hidden` 配置发现标记、触发关键词和恢复提示；未发现前不进入文件管理器目录/搜索结果，也不会被 `档案记录` 解析。玩家搜索命中特定关键词后，会向 `PlayerProfile.discoveredFlags` 写入发现标记，文档在文件管理器和档案记录中同时变为可见。
-- 当前示例隐藏档案源为 `DISK://LOCAL/RECORDS/CASES/H-19_seat_residue.arc`，对应档案 `H-19 / 核心席位残留索引`；搜索 `灯塔二级透镜`、`二级透镜` 或 `07:19 重复登录` 可恢复该条目。
+- 隐藏文档已接入通用机制：`VirtualDocument.hidden` 配置发现标记、诊断拨号码和恢复提示；未发现前不进入文件管理器目录/搜索结果，也不会被 `档案记录` 解析。玩家在文件管理器查询栏输入匹配暗码后，会向 `PlayerProfile.discoveredFlags` 写入发现标记，文档在文件管理器和档案记录中同时变为可见。
+- 当前示例隐藏档案源为 `DISK://LOCAL/RECORDS/CASES/H-19_seat_residue.arc`，对应档案 `H-19 / 核心席位残留索引`；输入 `#*#*6104*#*#` 可恢复该条目。中段 `6104` 来自北线报告确认触达的 `C-61` 与 `B-04`，去掉字母和连字符后按报告顺序拼接。
 - U 盘根目录包含 `委托书_文化部_优先级A+.txt`，这是普通明文委托书，不进入档案记录索引。
 - U 盘提示只在外接介质完成挂载时显示一次，从桌面右侧或移动端下方直线滑入；普通点击和目录切换不会重播入场动画。玩家点击“打开文件夹”或“不执行操作”会立即关闭提示，否则提示会在短暂停留后自动消失。
 - 右侧文档正文布局已修正，桌面宽屏下不会把段落拉伸到整块面板高度。
@@ -99,13 +99,13 @@ npm run build
 20. 回到文件管理器搜索 `REPORT_NORTHLINE_061`，打开加密报告。
 21. 用同步签名 `RX-SIG-6149` 生成校验码 `6149`，提交密钥 `JANUS-0719-6149`。
 22. 报告解锁后显示北线镜像报告正文，并标记本次短波谜题完成。
-23. 可继续搜索报告中出现的 `灯塔二级透镜`，文件管理器会恢复此前不在普通目录枚举中的 `H-19_seat_residue.arc`，档案记录区同步出现 `H-19 / 核心席位残留索引`。
+23. 可根据报告正文的诊断拨号码格式 `#*#*xxxx*#*#` 推出暗码 `#*#*6104*#*#`，在文件管理器查询栏执行后，系统会恢复此前不在普通目录枚举中的 `H-19_seat_residue.arc`，档案记录区同步出现 `H-19 / 核心席位残留索引`。
 
 ## 当前代码结构
 
 - `src/main.ts`：状态机和界面渲染。当前阶段包括 `boot`、`login`、`authenticating`、`archive`；`activeUtilityAppId` 控制档案工作区右侧辅助软件标签；`unlockedDocumentIds` 管理本次会话内的加密文档解锁状态；隐藏文档发现状态写入 `PlayerProfile.discoveredFlags`。
 - `src/styles.css`：视觉样式，包括终端布局、滚动条、文件管理器、档案工作区、辅助软件标签、文档解锁表单、登录界面和 U 盘通知。
-- `src/domain/types.ts`：访问规则、档案、通信、登录、虚拟文件系统等共享类型；`VirtualDocument.unlock` 用于配置加密文档，`VirtualDocument.hidden` 用于配置搜索发现式隐藏文档。
+- `src/domain/types.ts`：访问规则、档案、通信、登录、虚拟文件系统等共享类型；`VirtualDocument.unlock` 用于配置加密文档，`VirtualDocument.hidden` 用于配置暗码恢复式隐藏文档。
 - `src/domain/access.ts`：访问规则判定，独立于界面层。
 - `src/data/loginStage.ts`：第一阶段登录谜题内容。
 - `src/data/fileSystem.ts`：第二阶段虚拟存储卷、目录和文档，包括短波加密报告。

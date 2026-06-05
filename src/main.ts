@@ -603,6 +603,10 @@ function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function normalizeRecoveryCode(value: string): string {
+  return value.trim().replace(/\s+/g, '').toUpperCase();
+}
+
 function isDocumentUnlocked(document: VirtualDocument): boolean {
   return !document.unlock || unlockedDocumentIds.has(document.id);
 }
@@ -686,7 +690,7 @@ function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): 
     document.classification,
     getDocumentPath(document),
     ...document.tags,
-    ...(document.hidden?.keywords ?? []),
+    document.hidden?.recoveryCode ?? '',
     ...searchableBody,
   ]
     .join(' ')
@@ -695,24 +699,15 @@ function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): 
   return haystack.includes(normalizedQuery);
 }
 
-function matchesHiddenDiscovery(document: VirtualDocument, normalizedQuery: string): boolean {
-  if (!document.hidden || !normalizedQuery) return false;
-
-  return document.hidden.keywords.some((keyword) => {
-    const normalizedKeyword = normalizeSearchText(keyword);
-    return Boolean(normalizedKeyword && (normalizedQuery === normalizedKeyword || normalizedQuery.includes(normalizedKeyword)));
-  });
-}
-
-function revealHiddenDocumentsForSearch(query: string): VirtualDocument[] {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) return [];
+function revealHiddenDocumentsForRecoveryCode(code: string): VirtualDocument[] {
+  const normalizedCode = normalizeRecoveryCode(code);
+  if (!normalizedCode) return [];
 
   const revealedDocuments: VirtualDocument[] = [];
 
   virtualDocuments.forEach((document) => {
     if (!document.hidden || isHiddenDocumentDiscovered(document) || !isDocumentMounted(document)) return;
-    if (!matchesHiddenDiscovery(document, normalizedQuery)) return;
+    if (normalizeRecoveryCode(document.hidden.recoveryCode) !== normalizedCode) return;
 
     profile.discoveredFlags.push(document.hidden.discoveredFlag);
     revealedDocuments.push(document);
@@ -736,7 +731,7 @@ function getFileSearchRank(document: VirtualDocument, normalizedQuery: string): 
   const fileName = `${document.name}.${document.extension}`.toLowerCase();
   if (fileName.includes(normalizedQuery)) return 0;
   if (getDocumentPath(document).toLowerCase().includes(normalizedQuery)) return 1;
-  if ([...document.tags, ...(document.hidden?.keywords ?? [])].join(' ').toLowerCase().includes(normalizedQuery)) return 2;
+  if ([...document.tags, document.hidden?.recoveryCode ?? ''].join(' ').toLowerCase().includes(normalizedQuery)) return 2;
   if (document.classification.toLowerCase().includes(normalizedQuery)) return 3;
   return 4;
 }
@@ -880,9 +875,9 @@ function renderDirectoryList(directory: VirtualDirectory): string {
 function renderFileSearchForm(): string {
   return `
     <form class="file-search" id="fileSearchForm">
-      <span>SEARCH</span>
-      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" aria-label="搜索文件" autocomplete="off" />
-      <button type="submit">搜索</button>
+      <span>QUERY</span>
+      <input type="search" name="fileSearch" value="${escapeHtml(fileSearchQuery)}" aria-label="搜索文件或输入系统暗码" autocomplete="off" />
+      <button type="submit">执行</button>
       ${fileSearchQuery ? '<button type="button" data-file-search-clear>清除</button>' : ''}
     </form>
   `;
@@ -2229,7 +2224,7 @@ function bindArchiveEvents(): void {
     event.preventDefault();
     const formData = new FormData(fileSearchForm);
     fileSearchQuery = String(formData.get('fileSearch') ?? '').trim();
-    fileSearchNotice = getHiddenRevealNotice(revealHiddenDocumentsForSearch(fileSearchQuery));
+    fileSearchNotice = getHiddenRevealNotice(revealHiddenDocumentsForRecoveryCode(fileSearchQuery));
     selectedDocumentId = '';
     documentUnlockError = '';
     render();

@@ -151,7 +151,7 @@ const archiveSourceExtension = 'arc';
 const shortwaveSignalTargets: ShortwaveSignalTarget[] = [
   {
     id: 'northline-061',
-    label: '北线镜像报告 061',
+    label: '北线坐标报告 061',
     centerMhz: 6.107,
     phaseRad: 1.319,
     phaseToleranceRad: 0.035,
@@ -422,7 +422,7 @@ function renderLoginScreen(config: LoginStageConfig): string {
         <header class="login-card__header">
           <div>
             <p class="eyebrow">ARCHIVE ACCESS</p>
-            <h1>黑箱档案局</h1>
+            <h1>Echo Terminal</h1>
           </div>
           <span>AUTH-GATE 01</span>
         </header>
@@ -1544,7 +1544,7 @@ function renderChat(): string {
     ${
       canSendMessage
         ? `<form class="chat-input">
-            <input type="text" value="询问：沈医生的旧职位" aria-label="聊天输入" />
+            <input type="text" value="询问：萨克森铸造厂" aria-label="聊天输入" />
             <button type="button">发送</button>
           </form>`
         : `<div class="chat-readonly">只读镜像：当前账号不具备写入信道权限。</div>`
@@ -2033,7 +2033,7 @@ function renderClockTool(): string {
       <div class="clock-table">
         <span>授时中心</span><strong>failed</strong>
         <span>本地缓存</span><strong>active</strong>
-        <span>共和国历</span><strong>unmapped</strong>
+        <span>公国历</span><strong>unmapped</strong>
         <span>漂移估计</span><strong>+271 days?</strong>
       </div>
     </div>
@@ -2114,7 +2114,7 @@ function renderUsbNotice(): string {
         <p class="eyebrow">REMOVABLE DRIVE</p>
         <h2>可移动磁盘已插入</h2>
       </div>
-      <p>请选择要对可移动磁盘 AURORA-1907 执行的操作。</p>
+      <p>请选择要对可移动磁盘 LORRAINE-0719 执行的操作。</p>
       <div class="usb-notice__actions">
         <button type="button" data-usb-action="open">打开文件夹</button>
         <button type="button" data-usb-action="dismiss">不执行操作</button>
@@ -2493,7 +2493,7 @@ function render(): void {
         <div class="brand-block">
           <img class="brand-mark" src="./assets/bureau-seal.svg" alt="" />
           <div>
-            <h1>黑箱档案局</h1>
+            <h1>Echo Terminal</h1>
             <p>Read-Only Recovery Console / Local Cache Mode</p>
           </div>
         </div>

@@ -31,10 +31,10 @@ export const loginStage: LoginStageConfig = {
       delayMs: 4300,
     },
   ],
-  username: '中枢席位#0719',
-  usernameHint: '历史核心席位恢复模式 / 席位号不可修改',
-  avatarAlt: '核心席位原持有人头像',
-  avatarPlaceholder: '核心席位原持有人影像待定',
+  username: '核心席位#0719',
+  usernameHint: 'A 账户恢复模式 / 席位号不可修改',
+  avatarAlt: '账号原主人 A 的头像',
+  avatarPlaceholder: '账号原主人 A 的影像待定',
   passwordLabel: '访问口令',
   securityQuestion: '密保问题：席位编号的后四位是什么？',
   acceptedPasswords: ['0719'],
@@ -49,11 +49,11 @@ export const loginStage: LoginStageConfig = {
     },
     {
       tag: '权限',
-      text: '核心席位已降级为只读镜像，根据《遗迹访问协议》仅授予“只读”访问权限。',
+      text: '核心席位#0719 已降级为只读镜像，根据《遗迹访问协议》仅授予“只读”访问权限。',
     },
     {
       tag: '通知',
-      text: '所有操作将被记录。欢迎回来，中枢席位 0719。',
+      text: '所有操作将被记录。欢迎回来，核心席位 0719。',
     },
   ],
 };

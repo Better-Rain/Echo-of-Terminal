@@ -2,7 +2,7 @@ import type { PlayerProfile } from '../domain/types';
 
 export const currentProfile: PlayerProfile = {
   id: 'player-local-01',
-  displayName: '中枢席位#0719',
+  displayName: '核心席位#0719',
   activeRole: 'guest',
   roles: ['guest'],
   clearanceLevel: 2,

@@ -7,23 +7,23 @@ export const roleDefinitions: RoleDefinition[] = [
     shortName: 'MIRROR',
     clearanceCap: 2,
     permissions: ['case:read', 'case:read-redacted', 'chat:read', 'hint:view'],
-    description: '由旧系统核心席位降级生成的只读访问身份，可阅读基础档案和通信记录，但不能写入、解锁或修改任何字段。',
+    description: '由 A 的旧系统核心席位降级生成的只读访问身份，可阅读基础档案和通信记录，但不能写入、解锁或修改任何字段。',
   },
   {
     id: 'trainee',
-    name: '见习调查员',
+    name: '见习书记员',
     shortName: 'TRAINEE',
     clearanceCap: 1,
     permissions: ['case:read', 'case:read-redacted', 'chat:read', 'hint:view'],
-    description: '可查阅低权限档案，适合教学关和前置线索。',
+    description: '可查阅低权限档案，适合文化部内部教学和前置线索。',
   },
   {
     id: 'fieldAnalyst',
-    name: '外勤分析员',
+    name: '文化部学者',
     shortName: 'FIELD',
     clearanceCap: 2,
     permissions: ['case:read', 'case:read-redacted', 'chat:read', 'chat:message', 'hint:view'],
-    description: '默认玩家身份，可在多数档案和聊天之间自由交叉检索。',
+    description: '洛林公国文化部学者身份，可在多数档案和聊天之间自由交叉检索。',
   },
   {
     id: 'signalOperator',
@@ -35,7 +35,7 @@ export const roleDefinitions: RoleDefinition[] = [
   },
   {
     id: 'archivist',
-    name: '档案管理员',
+    name: '旧系统管理员',
     shortName: 'ARCHIVE',
     clearanceCap: 3,
     permissions: [
@@ -51,7 +51,7 @@ export const roleDefinitions: RoleDefinition[] = [
   },
   {
     id: 'director',
-    name: '局长',
+    name: 'ALPHA主管',
     shortName: 'DIRECTOR',
     clearanceCap: 5,
     permissions: [

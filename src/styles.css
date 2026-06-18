@@ -702,7 +702,7 @@ h2 {
 
 .search-strip {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
@@ -725,6 +725,20 @@ h2 {
 .search-strip input {
   height: 30px;
   padding: 5px 8px;
+}
+
+.search-strip button {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid rgba(77, 127, 113, 0.72);
+  background: rgba(83, 243, 138, 0.06);
+  color: var(--green);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.search-strip button:hover {
+  background: rgba(83, 243, 138, 0.14);
 }
 
 .file-search {
@@ -798,10 +812,130 @@ h2 {
 .storage-list,
 .document-list {
   display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 8px;
   min-height: 0;
   padding: 12px;
   overflow: auto;
+}
+
+.pinned-documents {
+  flex: 0 0 auto;
+  max-height: 196px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(243, 198, 103, 0.04);
+  overflow: auto;
+}
+
+.record-document-results {
+  flex: 0 0 auto;
+  max-height: 210px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(114, 217, 255, 0.035);
+  overflow: auto;
+}
+
+.pinned-documents__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px 6px;
+}
+
+.pinned-documents__header span {
+  color: var(--dim);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.pinned-documents__header strong {
+  color: var(--amber);
+  font-size: 0.78rem;
+}
+
+.pinned-documents__list {
+  display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.record-query-notice {
+  display: grid;
+  gap: 4px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(243, 198, 103, 0.06);
+  color: var(--amber);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.record-query-notice span {
+  color: var(--dim);
+  font-weight: 800;
+}
+
+.sidebar-document-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid rgba(36, 65, 59, 0.86);
+  background: rgba(5, 12, 11, 0.74);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-document-row:hover,
+.sidebar-document-row.is-selected {
+  border-color: var(--green);
+  background: rgba(83, 243, 138, 0.08);
+}
+
+.sidebar-document-row--pinned {
+  border-color: rgba(243, 198, 103, 0.52);
+}
+
+.sidebar-document-row__mark {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  border: 1px solid rgba(243, 198, 103, 0.46);
+  color: var(--amber);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sidebar-document-row__main {
+  min-width: 0;
+}
+
+.sidebar-document-row__main strong,
+.sidebar-document-row__main em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-document-row__main strong {
+  color: #f4fff5;
+  font-size: 0.78rem;
+}
+
+.sidebar-document-row__main em {
+  margin-top: 3px;
+  color: var(--dim);
+  font-size: 0.66rem;
+  font-style: normal;
 }
 
 .mount-status {
@@ -975,6 +1109,22 @@ h2 {
   overflow: auto;
   color: #dff5e2;
   font-size: 0.92rem;
+}
+
+.document-pin-button {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(243, 198, 103, 0.68);
+  background: rgba(243, 198, 103, 0.06);
+  color: var(--amber);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.document-pin-button:hover,
+.document-pin-button[aria-pressed="true"] {
+  background: rgba(243, 198, 103, 0.14);
 }
 
 .document-body p {
@@ -1208,6 +1358,9 @@ h2 {
 
 .file-list {
   display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
+  flex: 1 1 auto;
   gap: 8px;
   min-height: 0;
   padding: 12px;

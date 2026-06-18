@@ -121,11 +121,15 @@ let communicationsReturnView: CommunicationsReturnView = 'threads';
 let mountStage: MountStage = 'scanning';
 let selectedDirectoryId = 'local-root';
 let selectedDocumentId = '';
+let selectedRecordDocumentId = '';
 const unlockedDocumentIds = new Set<string>();
+const pinnedDocumentIds = new Set<string>(['comm-code-protocol']);
 let shortwaveFrequencyMhz = 6.107;
 let shortwavePhaseRad = 0;
 let fileSearchQuery = '';
 let fileSearchNotice = '';
+let recordSearchQuery = '';
+let recordSearchNotice = '';
 let showUsbNotice = false;
 let usbNoticeShouldAnimate = false;
 let mountSequenceScheduled = false;
@@ -224,8 +228,11 @@ function enterArchiveShell(): void {
   mountStage = 'scanning';
   selectedDirectoryId = 'local-root';
   selectedDocumentId = '';
+  selectedRecordDocumentId = '';
   fileSearchQuery = '';
   fileSearchNotice = '';
+  recordSearchQuery = '';
+  recordSearchNotice = '';
   showUsbNotice = false;
   usbNoticeShouldAnimate = false;
   clearUsbNoticeTimer();
@@ -607,6 +614,10 @@ function normalizeRecoveryCode(value: string): string {
   return value.trim().replace(/\s+/g, '').toUpperCase();
 }
 
+function isRecoveryCodeQuery(value: string): boolean {
+  return /^#\*#\*\d+\*#\*#$/.test(normalizeRecoveryCode(value));
+}
+
 function isDocumentUnlocked(document: VirtualDocument): boolean {
   return !document.unlock || unlockedDocumentIds.has(document.id);
 }
@@ -682,6 +693,32 @@ function getVisibleDocuments(): VirtualDocument[] {
   return virtualDocuments.filter((document) => isDocumentVisible(document));
 }
 
+function isDocumentPinned(document: VirtualDocument): boolean {
+  return pinnedDocumentIds.has(document.id);
+}
+
+function getPinnedDocuments(): VirtualDocument[] {
+  return Array.from(pinnedDocumentIds)
+    .map((documentId) => virtualDocuments.find((document) => document.id === documentId))
+    .filter((document): document is VirtualDocument => Boolean(document && isDocumentVisible(document)));
+}
+
+function getSelectedRecordDocument(): VirtualDocument | undefined {
+  if (!selectedRecordDocumentId) return undefined;
+
+  return virtualDocuments.find((document) => document.id === selectedRecordDocumentId && isDocumentVisible(document));
+}
+
+function getActivePreviewDocument(): VirtualDocument | undefined {
+  if (workspaceView === 'records') {
+    const recordDocument = getSelectedRecordDocument();
+    if (recordDocument) return recordDocument;
+  }
+
+  const directory = getSelectedDirectory();
+  return directory ? getSelectedDocument(directory) : undefined;
+}
+
 function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): boolean {
   const searchableBody = isDocumentUnlocked(document) ? document.body : document.unlock?.lockedBody ?? document.body;
   const haystack = [
@@ -699,15 +736,26 @@ function matchesFileSearch(document: VirtualDocument, normalizedQuery: string): 
   return haystack.includes(normalizedQuery);
 }
 
+function getMountedHiddenDocumentsForRecoveryCode(code: string): VirtualDocument[] {
+  const normalizedCode = normalizeRecoveryCode(code);
+  if (!normalizedCode) return [];
+
+  return virtualDocuments.filter(
+    (document) =>
+      Boolean(document.hidden) &&
+      isDocumentMounted(document) &&
+      normalizeRecoveryCode(document.hidden!.recoveryCode) === normalizedCode,
+  );
+}
+
 function revealHiddenDocumentsForRecoveryCode(code: string): VirtualDocument[] {
   const normalizedCode = normalizeRecoveryCode(code);
   if (!normalizedCode) return [];
 
   const revealedDocuments: VirtualDocument[] = [];
 
-  virtualDocuments.forEach((document) => {
-    if (!document.hidden || isHiddenDocumentDiscovered(document) || !isDocumentMounted(document)) return;
-    if (normalizeRecoveryCode(document.hidden.recoveryCode) !== normalizedCode) return;
+  getMountedHiddenDocumentsForRecoveryCode(normalizedCode).forEach((document) => {
+    if (!document.hidden || isHiddenDocumentDiscovered(document)) return;
 
     profile.discoveredFlags.push(document.hidden.discoveredFlag);
     revealedDocuments.push(document);
@@ -716,15 +764,21 @@ function revealHiddenDocumentsForRecoveryCode(code: string): VirtualDocument[] {
   return revealedDocuments;
 }
 
-function getHiddenRevealNotice(documents: VirtualDocument[]): string {
-  if (!documents.length) return '';
+function getHiddenRevealNotice(code: string, documents: VirtualDocument[]): string {
+  if (!documents.length && !isRecoveryCodeQuery(code)) return '';
 
   const messages = documents
     .map((document) => document.hidden?.revealMessage)
     .filter((message): message is string => Boolean(message));
 
   if (messages.length) return Array.from(new Set(messages)).join(' ');
-  return `索引重建：恢复 ${documents.length} 个此前未登记的镜像条目。`;
+  if (documents.length) return `索引重建：恢复 ${documents.length} 个此前未登记的镜像条目。`;
+
+  if (getMountedHiddenDocumentsForRecoveryCode(code).length) {
+    return '索引已恢复：对应条目已在目录中可见。';
+  }
+
+  return '无效：没有对应暗码。';
 }
 
 function getFileSearchRank(document: VirtualDocument, normalizedQuery: string): number {
@@ -739,6 +793,48 @@ function getFileSearchRank(document: VirtualDocument, normalizedQuery: string): 
 function getFileSearchResults(): VirtualDocument[] {
   const normalizedQuery = normalizeSearchText(fileSearchQuery);
   if (!normalizedQuery) return [];
+  if (isRecoveryCodeQuery(fileSearchQuery) && !getMountedHiddenDocumentsForRecoveryCode(fileSearchQuery).length) return [];
+
+  return getVisibleDocuments()
+    .filter((document) => matchesFileSearch(document, normalizedQuery))
+    .sort(
+      (a, b) =>
+        getFileSearchRank(a, normalizedQuery) - getFileSearchRank(b, normalizedQuery) ||
+        getDocumentPath(a).localeCompare(getDocumentPath(b)),
+    );
+}
+
+function matchesCaseSearch(file: CaseFile, normalizedQuery: string): boolean {
+  const sourceDocument = getCaseSourceDocument(file);
+  const haystack = [
+    file.code,
+    file.title,
+    file.unit,
+    file.date,
+    file.classification,
+    file.teaser,
+    file.summary,
+    ...file.tags,
+    sourceDocument ? getDocumentPath(sourceDocument) : '',
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(normalizedQuery);
+}
+
+function getRecordCaseList(): CaseFile[] {
+  const files = getParseableCaseFiles();
+  const normalizedQuery = normalizeSearchText(recordSearchQuery);
+  if (!normalizedQuery || isRecoveryCodeQuery(recordSearchQuery)) return files;
+
+  return files.filter((file) => matchesCaseSearch(file, normalizedQuery));
+}
+
+function getRecordDocumentSearchResults(): VirtualDocument[] {
+  const normalizedQuery = normalizeSearchText(recordSearchQuery);
+  if (!normalizedQuery) return [];
+  if (isRecoveryCodeQuery(recordSearchQuery) && !getMountedHiddenDocumentsForRecoveryCode(recordSearchQuery).length) return [];
 
   return getVisibleDocuments()
     .filter((document) => matchesFileSearch(document, normalizedQuery))
@@ -847,11 +943,16 @@ function renderParentDirectoryRow(directory: VirtualDirectory): string {
 }
 
 function renderDocumentRow(document: VirtualDocument, withPath = false): string {
-  const selected = document.id === selectedDocumentId ? 'is-selected' : '';
+  const classes = [
+    'document-row',
+    document.id === selectedDocumentId ? 'is-selected' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const pathMarkup = withPath ? `<span class="document-row__path">${getDocumentPath(document)}</span>` : '';
 
   return `
-    <button class="document-row ${selected}" type="button" data-document-id="${document.id}" data-document-directory-id="${document.directoryId}">
+    <button class="${classes}" type="button" data-document-id="${document.id}" data-document-directory-id="${document.directoryId}">
       <span class="document-row__icon">${document.extension}</span>
       <span class="document-row__main">
         <span class="document-row__name">${document.name}.${document.extension}</span>
@@ -902,6 +1003,85 @@ function renderFileSearchResults(results: VirtualDocument[]): string {
   return results.map((document) => renderDocumentRow(document, true)).join('');
 }
 
+function renderSidebarDocumentRow(document: VirtualDocument, context: 'pinned' | 'result'): string {
+  const classes = [
+    'sidebar-document-row',
+    document.id === selectedRecordDocumentId ? 'is-selected' : '',
+    isDocumentPinned(document) ? 'sidebar-document-row--pinned' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const label = context === 'pinned' ? '置顶' : document.extension.toUpperCase();
+
+  return `
+    <button class="${classes}" type="button" data-record-document-id="${document.id}">
+      <span class="sidebar-document-row__mark">${label}</span>
+      <span class="sidebar-document-row__main">
+        <strong>${document.name}.${document.extension}</strong>
+        <em>${getDocumentPath(document)}</em>
+      </span>
+    </button>
+  `;
+}
+
+function renderPinnedDocumentList(): string {
+  const pinnedDocuments = getPinnedDocuments();
+  if (!pinnedDocuments.length) return '';
+
+  return `
+    <section class="pinned-documents" aria-label="置顶文档">
+      <header class="pinned-documents__header">
+        <span>PINNED</span>
+        <strong>置顶文档</strong>
+      </header>
+      <div class="pinned-documents__list">
+        ${pinnedDocuments.map((document) => renderSidebarDocumentRow(document, 'pinned')).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function renderRecordSearchForm(): string {
+  return `
+    <form class="search-strip" id="recordSearchForm">
+      <span>QUERY</span>
+      <input type="search" name="recordSearch" value="${escapeHtml(recordSearchQuery)}" aria-label="档案搜索或输入系统暗码" autocomplete="off" />
+      <button type="submit">执行</button>
+      ${recordSearchQuery ? '<button type="button" data-record-search-clear>清除</button>' : ''}
+    </form>
+  `;
+}
+
+function renderRecordSearchNotice(): string {
+  if (!recordSearchNotice) return '';
+
+  return `
+    <div class="record-query-notice">
+      <span>INDEX</span>
+      <strong>${escapeHtml(recordSearchNotice)}</strong>
+    </div>
+  `;
+}
+
+function renderRecordDocumentSearchResults(): string {
+  if (!recordSearchQuery) return '';
+
+  const results = getRecordDocumentSearchResults();
+  if (!results.length) return '';
+
+  return `
+    <section class="record-document-results" aria-label="文档查询结果">
+      <header class="pinned-documents__header">
+        <span>QUERY</span>
+        <strong>文档结果</strong>
+      </header>
+      <div class="pinned-documents__list">
+        ${results.map((document) => renderSidebarDocumentRow(document, 'result')).join('')}
+      </div>
+    </section>
+  `;
+}
+
 function renderDocumentPreview(document: VirtualDocument | undefined): string {
   if (!document) {
     return `
@@ -927,6 +1107,15 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
   ]
     .filter(Boolean)
     .join(' ');
+  const showPinAction = workspaceView === 'records';
+  const isPinned = isDocumentPinned(document);
+  const pinActionMarkup = showPinAction
+    ? `
+        <button class="document-pin-button" type="button" data-document-pin="${document.id}" aria-pressed="${isPinned}">
+          ${isPinned ? '取消置顶' : '置顶'}
+        </button>
+      `
+    : '';
 
   return `
     <section class="document-panel" aria-label="文档预览">
@@ -935,6 +1124,7 @@ function renderDocumentPreview(document: VirtualDocument | undefined): string {
           <p class="eyebrow">DOCUMENT</p>
           <h2>${document.name}.${document.extension}</h2>
         </div>
+        ${pinActionMarkup}
       </header>
       <div class="record-grid">
         <div class="field">
@@ -1067,7 +1257,12 @@ function renderFileManagerWorkspace(): string {
 }
 
 function renderFileList(): string {
-  return getParseableCaseFiles()
+  const files = getRecordCaseList();
+  if (!files.length) {
+    return renderMountStatus('NO MATCH', '没有匹配档案', `未在可解析档案中找到 “${escapeHtml(recordSearchQuery)}”。`);
+  }
+
+  return files
     .map((file) => {
       const selected = file.id === selectedFileId ? 'is-selected' : '';
       const statusClass = getStatusClass(file, profile);
@@ -2065,7 +2260,9 @@ function getUtilityCommand(): string {
   return utilityApps.find((utilityApp) => utilityApp.id === activeUtilityAppId)?.command ?? activeUtilityAppId;
 }
 
-function renderRecordsWorkspace(activeFile: CaseFile | undefined): string {
+function renderRecordsWorkspace(activeFile: CaseFile | undefined, activeDocument: VirtualDocument | undefined): string {
+  const mainPanel = activeDocument ? renderDocumentPreview(activeDocument) : activeFile ? renderActiveFile(activeFile) : renderRecordPlaceholder();
+
   return `
     <section class="workspace workspace--records">
       <aside class="sidebar" aria-label="档案列表">
@@ -2076,16 +2273,16 @@ function renderRecordsWorkspace(activeFile: CaseFile | undefined): string {
           </div>
         </div>
         ${renderRoleSummary()}
-        <div class="search-strip">
-          <span>QUERY</span>
-          <input type="text" value="" aria-label="档案搜索" autocomplete="off" />
-        </div>
+        ${renderRecordSearchForm()}
+        ${renderRecordSearchNotice()}
+        ${renderPinnedDocumentList()}
+        ${renderRecordDocumentSearchResults()}
         <nav class="file-list">
           ${renderFileList()}
         </nav>
       </aside>
 
-      ${activeFile ? renderActiveFile(activeFile) : renderRecordPlaceholder()}
+      ${mainPanel}
 
       <aside class="utility-panel" aria-label="辅助软件">
         <header class="utility-tabs" aria-label="软件标签页">
@@ -2188,6 +2385,7 @@ function bindArchiveEvents(): void {
 
       selectedDirectoryId = directory.id;
       selectedDocumentId = '';
+      selectedRecordDocumentId = '';
       fileSearchQuery = '';
       fileSearchNotice = '';
       documentUnlockError = '';
@@ -2212,9 +2410,38 @@ function bindArchiveEvents(): void {
 
       if (directoryId) selectedDirectoryId = directoryId;
       selectedDocumentId = documentId ?? selectedDocumentId;
+      selectedRecordDocumentId = '';
       fileSearchQuery = '';
       fileSearchNotice = '';
       documentUnlockError = '';
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-document-pin]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const documentId = button.dataset.documentPin;
+      if (!documentId) return;
+
+      if (pinnedDocumentIds.has(documentId)) {
+        pinnedDocumentIds.delete(documentId);
+      } else {
+        pinnedDocumentIds.add(documentId);
+      }
+
+      render();
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-record-document-id]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const documentId = button.dataset.recordDocumentId;
+      if (!documentId) return;
+
+      selectedRecordDocumentId = selectedRecordDocumentId === documentId ? '' : documentId;
+      selectedFileId = '';
+      documentUnlockError = '';
+      workspaceView = 'records';
       render();
     });
   });
@@ -2224,10 +2451,34 @@ function bindArchiveEvents(): void {
     event.preventDefault();
     const formData = new FormData(fileSearchForm);
     fileSearchQuery = String(formData.get('fileSearch') ?? '').trim();
-    fileSearchNotice = getHiddenRevealNotice(revealHiddenDocumentsForRecoveryCode(fileSearchQuery));
+    fileSearchNotice = getHiddenRevealNotice(fileSearchQuery, revealHiddenDocumentsForRecoveryCode(fileSearchQuery));
     selectedDocumentId = '';
     documentUnlockError = '';
     render();
+  });
+
+  const recordSearchForm = document.querySelector<HTMLFormElement>('#recordSearchForm');
+  recordSearchForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const formData = new FormData(recordSearchForm);
+    recordSearchQuery = String(formData.get('recordSearch') ?? '').trim();
+    const revealedDocuments = revealHiddenDocumentsForRecoveryCode(recordSearchQuery);
+    recordSearchNotice = getHiddenRevealNotice(recordSearchQuery, revealedDocuments);
+    if (revealedDocuments[0]) {
+      selectedRecordDocumentId = revealedDocuments[0].id;
+      selectedFileId = '';
+    }
+    documentUnlockError = '';
+    render();
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-record-search-clear]').forEach((button) => {
+    button.addEventListener('click', () => {
+      recordSearchQuery = '';
+      recordSearchNotice = '';
+      documentUnlockError = '';
+      render();
+    });
   });
 
   document.querySelectorAll<HTMLButtonElement>('[data-file-search-clear]').forEach((button) => {
@@ -2243,8 +2494,7 @@ function bindArchiveEvents(): void {
   documentUnlockForm?.addEventListener('submit', (event) => {
     event.preventDefault();
 
-    const directory = getSelectedDirectory();
-    const document = directory ? getSelectedDocument(directory) : undefined;
+    const document = getActivePreviewDocument();
     if (!document?.unlock) return;
 
     const formData = new FormData(documentUnlockForm);
@@ -2276,6 +2526,7 @@ function bindArchiveEvents(): void {
     button.addEventListener('click', () => {
       const fileId = button.dataset.fileId;
       selectedFileId = fileId === selectedFileId ? '' : fileId ?? selectedFileId;
+      selectedRecordDocumentId = '';
       render();
     });
   });
@@ -2483,8 +2734,9 @@ function render(): void {
 
   const parseableCaseFiles = getParseableCaseFiles();
   const activeFile = parseableCaseFiles.find((file) => file.id === selectedFileId);
+  const activeRecordDocument = getSelectedRecordDocument();
   const workspaceMarkup =
-    workspaceView === 'files' ? renderFileManagerWorkspace() : renderRecordsWorkspace(activeFile);
+    workspaceView === 'files' ? renderFileManagerWorkspace() : renderRecordsWorkspace(activeFile, activeRecordDocument);
 
   root.innerHTML = `
     <main class="archive-shell">

@@ -349,7 +349,7 @@ export const caseFiles: CaseFile[] = [
         body: '若后续线索要求查找隐藏条目，应优先确认拨号码格式、编号来源和编号顺序，而不是遍历所有目录。',
       },
     ],
-    internalNote: '隐藏文档示例：在文件管理器查询栏输入诊断拨号码 #*#*6104*#*# 后，源文件与本档案才会进入可见索引。',
+    internalNote: '隐藏文档示例：在档案记录左侧 QUERY 输入诊断拨号码 #*#*6104*#*# 后，源文件与本档案才会进入可见索引。',
     linkedThreadIds: ['shen-dewen'],
     puzzleIds: ['puzzle-hidden-document-code'],
     tags: ['隐藏索引', 'A', '核心席位', '0719'],
